@@ -883,7 +883,7 @@
         - a boolean 'readonly' flag, this is used for validation and hazard
           tracking in some 3D backends. Note that in render passes, only
           readonly storage buffer bindings are allowed. In compute passes, any
-          read/write storage buffer binding is assumbed to be written to by the
+          read/write storage buffer binding is assumed to be written to by the
           compute shader.
         - a backend-specific bind slot:
             - D3D11/HLSL:
@@ -978,7 +978,7 @@
         - for Metal:    https://github.com/floooh/sokol-samples/tree/master/metal
         - for OpenGL:   https://github.com/floooh/sokol-samples/tree/master/glfw
         - for GLES3:    https://github.com/floooh/sokol-samples/tree/master/html5
-        - for WebGPI:   https://github.com/floooh/sokol-samples/tree/master/wgpu
+        - for WebGPU:   https://github.com/floooh/sokol-samples/tree/master/wgpu
 
 
     ON SG_IMAGESAMPLETYPE_UNFILTERABLE_FLOAT AND SG_SAMPLERTYPE_NONFILTERING
