@@ -1440,7 +1440,7 @@
         sg_end_pass();
 
     Storage attachments should only be accessed as `readwrite` or `writeonly` mode
-    in compute shaders because if the limited bind space of up to 4 slots. For
+    in compute shaders because of the limited bind space of up to 4 slots. For
     readonly access, just bind the storage image as regular texture via
     `sg_apply_bindings()`.
 
