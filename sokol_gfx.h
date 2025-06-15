@@ -1424,7 +1424,7 @@
     ...next the image object must be wrapped in an attachment object, this allows
     to pick a specific mipmap level or slice to be accessed by the compute shader:
 
-        sg_attachments storage_attachment = sg_make_attachment(&(sg_attachments_desc){
+        sg_attachments storage_attachment = sg_make_attachments(&(sg_attachments_desc){
             .storages[0] = {
                 .image = storage_image,
                 .mip_level = ...,
