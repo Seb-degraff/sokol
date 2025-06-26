@@ -2565,6 +2565,7 @@ typedef struct {
     _sapp_macos_window_delegate* win_dlg;
     _sapp_macos_view* view;
     NSCursor* cursors[_SAPP_MOUSECURSOR_NUM];
+    bool fullscreen_transition_in_progress;
     #if defined(SOKOL_METAL)
         id<MTLDevice> mtl_device;
     #endif
@@ -4440,11 +4441,14 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
     // Can be removed if/when migrating to CAMetalLayer: https://github.com/floooh/sokol/issues/727
     bool resizing_from_left = _sapp.mouse.x < _sapp.window_width/2;
     bool resizing_from_top = _sapp.mouse.y < _sapp.window_height/2;
-    NSViewLayerContentsPlacement placement;
-    if (resizing_from_left) {
-        placement = resizing_from_top ? NSViewLayerContentsPlacementBottomRight : NSViewLayerContentsPlacementTopRight;
-    } else {
-        placement = resizing_from_top ? NSViewLayerContentsPlacementBottomLeft : NSViewLayerContentsPlacementTopLeft;
+    // During a fullscreen transition, stretch looks good.
+    NSViewLayerContentsPlacement placement = NSViewLayerContentsPlacementScaleAxesIndependently;
+    if (!_sapp.macos.fullscreen_transition_in_progress) {
+        if (resizing_from_left) {
+            placement = resizing_from_top ? NSViewLayerContentsPlacementBottomRight : NSViewLayerContentsPlacementTopRight;
+        } else {
+            placement = resizing_from_top ? NSViewLayerContentsPlacementBottomLeft : NSViewLayerContentsPlacementTopLeft;
+        }
     }
     _sapp.macos.view.layerContentsPlacement = placement;
 }
@@ -4481,13 +4485,25 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
     _sapp_macos_app_event(SAPP_EVENTTYPE_UNFOCUSED);
 }
 
+- (void)windowWillEnterFullScreen:(NSNotification *)notification {
+    _SOKOL_UNUSED(notification);
+    _sapp.macos.fullscreen_transition_in_progress = true;
+}
+
 - (void)windowDidEnterFullScreen:(NSNotification*)notification {
     _SOKOL_UNUSED(notification);
     _sapp.fullscreen = true;
+    _sapp.macos.fullscreen_transition_in_progress = false;
+}
+
+- (void)windowWillExitFullScreen:(NSNotification *)notification {
+    _SOKOL_UNUSED(notification);
+    _sapp.macos.fullscreen_transition_in_progress = true;
 }
 
 - (void)windowDidExitFullScreen:(NSNotification*)notification {
     _SOKOL_UNUSED(notification);
+    _sapp.macos.fullscreen_transition_in_progress = false;
     _sapp.fullscreen = false;
 }
 @end
