@@ -2,6 +2,16 @@
 #define SOKOL_GFX_IMPL
 #endif
 #ifndef SOKOL_GFX_INCLUDED
+
+// SEB added
+#ifdef rdx_prof_push
+    #define sg_rdx_prof_push(a) rdx_prof_push(a)
+    #define sg_rdx_prof_pop() rdx_prof_pop()
+#else
+    #define sg_rdx_prof_push(a)
+    #define sg_rdx_prof_pop()
+#endif
+
 /*
     sokol_gfx.h -- simple 3D API wrapper
 
@@ -1929,12 +1939,14 @@ extern "C" {
     The resource ids are wrapped into a strongly-typed struct so that
     trying to pass an incompatible resource id is a compile error.
 */
-typedef struct sg_buffer        { uint32_t id; } sg_buffer;
-typedef struct sg_image         { uint32_t id; } sg_image;
-typedef struct sg_sampler       { uint32_t id; } sg_sampler;
-typedef struct sg_shader        { uint32_t id; } sg_shader;
-typedef struct sg_pipeline      { uint32_t id; } sg_pipeline;
-typedef struct sg_attachments   { uint32_t id; } sg_attachments;
+// SEB: these are declared in sokol_gfx_types.h so we can include them in our own apis without bringing in the whole file.
+#include "sokol_gfx_types.h"
+// typedef struct sg_buffer        { uint32_t id; } sg_buffer;
+// typedef struct sg_image         { uint32_t id; } sg_image;
+// typedef struct sg_sampler       { uint32_t id; } sg_sampler;
+// typedef struct sg_shader        { uint32_t id; } sg_shader;
+// typedef struct sg_pipeline      { uint32_t id; } sg_pipeline;
+// typedef struct sg_attachments   { uint32_t id; } sg_attachments;
 
 /*
     sg_range is a pointer-size-pair struct used to pass memory blobs into
@@ -4078,6 +4090,8 @@ typedef struct sg_frame_stats {
     uint32_t size_append_buffer;
     uint32_t size_update_image;
 
+    double gpu_duration; // SEB added
+
     sg_frame_stats_gl gl;
     sg_frame_stats_d3d11 d3d11;
     sg_frame_stats_metal metal;
@@ -4741,6 +4755,7 @@ SOKOL_GFX_API_DECL void sg_commit(void);
 // getting information
 SOKOL_GFX_API_DECL sg_desc sg_query_desc(void);
 SOKOL_GFX_API_DECL sg_backend sg_query_backend(void);
+SOKOL_GFX_API_DECL char* sg_query_backend_name(void); // seb added
 SOKOL_GFX_API_DECL sg_features sg_query_features(void);
 SOKOL_GFX_API_DECL sg_limits sg_query_limits(void);
 SOKOL_GFX_API_DECL sg_pixelformat_info sg_query_pixelformat(sg_pixel_format fmt);
@@ -5192,7 +5207,9 @@ inline int sg_append_buffer(sg_buffer buf_id, const sg_range& data) { return sg_
                 #define NOMINMAX
                 #endif
                 #include <windows.h>
-                #pragma comment (lib, "kernel32")   // GetProcAddress()
+                #if defined(_MSC_VER) // NOTE: seb added
+                    #pragma comment (lib, "kernel32")   // GetProcAddress()
+                #endif
                 #define _SOKOL_GL_HAS_COMPUTE (1)
                 #define _SOKOL_GL_HAS_TEXSTORAGE (1)
             #endif
@@ -5814,6 +5831,7 @@ typedef struct {
     int sample_count;
     sg_color blend_color;
     bool alpha_to_coverage_enabled;
+    char* label; // seb
 } _sg_pipeline_common_t;
 
 typedef struct {
@@ -6028,13 +6046,18 @@ typedef struct {
 typedef struct {
     bool valid;
     GLuint vao;
+    // SEB added start
+    //GLuint query; // perf timer
+    GLuint frame_time_queries[8];
+    uint32_t frame_time_queries_waiting_for_frame;
+    // SEB added end
     _sg_gl_state_cache_t cache;
     bool ext_anisotropic;
     GLint max_anisotropy;
     sg_store_action color_store_actions[SG_MAX_COLOR_ATTACHMENTS];
     sg_store_action depth_store_action;
     sg_store_action stencil_store_action;
-    #if _SOKOL_USE_WIN32_GL_LOADER
+    #if defined(_SOKOL_USE_WIN32_GL_LOADER) // seb added define(...)
     HINSTANCE opengl32_dll;
     #endif
 } _sg_gl_backend_t;
@@ -7366,6 +7389,7 @@ _SOKOL_PRIVATE void _sg_pipeline_common_init(_sg_pipeline_common_t* cmn, const s
     cmn->sample_count = desc->sample_count;
     cmn->blend_color = desc->blend_color;
     cmn->alpha_to_coverage_enabled = desc->alpha_to_coverage_enabled;
+    cmn->label = desc->label; // seb
 }
 
 _SOKOL_PRIVATE void _sg_attachment_common_init(_sg_attachment_common_t* cmn, const sg_attachment_desc* desc, _sg_image_t* img) {
@@ -9608,6 +9632,14 @@ _SOKOL_PRIVATE void _sg_gl_setup_backend(const sg_desc* desc) {
         // enable seamless cubemap sampling (only desktop GL)
         glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
     #endif
+
+    // SEB added start
+    //glGenQueries(1, &_sg.gl.query);
+    #ifndef SOKOL_GLES3
+    glGenQueries(sizeof(_sg.gl.frame_time_queries) / sizeof(_sg.gl.frame_time_queries[0]), _sg.gl.frame_time_queries);
+    #endif
+    // SEB added end
+
     _sg_gl_reset_state_cache();
 }
 
@@ -10409,6 +10441,32 @@ _SOKOL_PRIVATE void _sg_gl_begin_pass(const sg_pass* pass) {
         #endif
         glBindFramebuffer(GL_FRAMEBUFFER, atts->gl.fb);
     } else {
+        // SEB added start
+        #ifndef SOKOL_GLES3
+        if (_sg.gl.frame_time_queries_waiting_for_frame != 0) {
+            GLuint result = 42;
+            GLint current_query = _sg.gl.frame_time_queries[_sg.gl.frame_time_queries_waiting_for_frame % 8];
+            glGetQueryObjectuiv(current_query, GL_QUERY_RESULT_AVAILABLE, &result);
+            //rdx_log("available: %i", result);
+            if (result != 0) {
+                glGetQueryObjectuiv(current_query, GL_QUERY_RESULT, &result);
+                _sg.gl.frame_time_queries_waiting_for_frame++;
+                if (_sg.stats_enabled) {
+                    _sg.stats.gpu_duration = (double) result / 1000000000LL; // "All times returned are measured in nanoseconds" https://www.khronos.org/opengl/wiki/Query_Object
+                }
+                //rdx_log("%i", result);
+            }
+        }
+        if (_sg.gl.frame_time_queries_waiting_for_frame == 0) {
+            _sg.gl.frame_time_queries_waiting_for_frame = _sg.frame_index;
+        }
+        // glBeginQuery(GL_TIME_ELAPSED, _sg.gl.query);
+        //rdx_log("glBeginQuery %i", _sg.frame_index);
+        glBeginQuery(GL_TIME_ELAPSED, _sg.gl.frame_time_queries[_sg.frame_index % 8]);
+        _SG_GL_CHECK_ERROR(); // remove?
+        #endif
+        // SEB added end
+
         // default pass
         #if defined(SOKOL_GLCORE)
         glDisable(GL_FRAMEBUFFER_SRGB);
@@ -10566,6 +10624,14 @@ _SOKOL_PRIVATE void _sg_gl_end_pass(void) {
     if (_sg.cur_pass.is_compute) {
         _sg_gl_end_compute_pass();
     } else {
+        // default pass
+        //rdx_log("glEndQuery");
+        #ifndef SOKOL_GLES3
+        glEndQuery(GL_TIME_ELAPSED); // SEB added
+        #endif
+        // GLint result = 42;
+        // glGetQueryObjectiv(_sg.gl.query, GL_QUERY_RESULT, &result);
+        // rdx_log("%i", result);
         _sg_gl_end_render_pass();
     }
     _SG_GL_CHECK_ERROR();
@@ -13553,7 +13619,7 @@ _SOKOL_PRIVATE MTLResourceOptions _sg_mtl_resource_options_storage_mode_managed_
 
 _SOKOL_PRIVATE MTLResourceOptions _sg_mtl_buffer_resource_options(const sg_buffer_usage* usage) {
     if (usage->immutable) {
-        return _sg_mtl_resource_options_storage_mode_managed_or_shared();
+        return _sg_mtl_resource_options_storage_mode_managed_or_shared(); // NOTE(seb): shouldn't we set the immutable resources to MTLResourceCPUCacheModeWriteCombined? "A write-combined CPU cache mode that is optimized for resources that the CPU writes into, but never reads."
     } else {
         return MTLResourceCPUCacheModeWriteCombined | _sg_mtl_resource_options_storage_mode_managed_or_shared();
     }
@@ -15073,6 +15139,19 @@ _SOKOL_PRIVATE void _sg_mtl_begin_pass(const sg_pass* pass) {
         [_sg.mtl.cmd_buffer addCompletedHandler:^(id<MTLCommandBuffer> cmd_buf) {
             // NOTE: this code is called on a different thread!
             _SOKOL_UNUSED(cmd_buf);
+
+            // SEB added start
+            #ifndef SOKOL_GLES3
+            if (_sg.stats_enabled) {
+                CFTimeInterval start = cmd_buf.GPUStartTime;
+                CFTimeInterval end = cmd_buf.GPUEndTime;
+                CFTimeInterval gpuRuntimeDuration = end - start;
+                _sg.stats.gpu_duration = gpuRuntimeDuration; // Hopefully it's not a problem to set a static variable like that from an unkown
+                                                            // thread, but I think for that usage it's probably fine. -- seb
+            }
+            #endif
+            // SEB added end
+
             dispatch_semaphore_signal(_sg.mtl.sem);
         }];
     }
@@ -15169,7 +15248,7 @@ _SOKOL_PRIVATE void _sg_mtl_apply_scissor_rect(int x, int y, int w, int h, bool 
     SOKOL_ASSERT(_sg.cur_pass.width > 0);
     SOKOL_ASSERT(_sg.cur_pass.height > 0);
     // clip against framebuffer rect
-    const _sg_recti_t clip = _sg_clipi(x, y, w, h, _sg.cur_pass.width, _sg.cur_pass.height);
+    const _sg_recti_t clip = _sg_clipi(x, y, w, h, _sg.cur_pass.width*10, _sg.cur_pass.height*10); // Seb: multiplied by 10 because when transitionning out of fullscreen we are clipping "too much" in the first frame of the new resolution, for some reason I don't understand.
     MTLScissorRect r;
     r.x = (NSUInteger)clip.x;
     r.y = (NSUInteger) (origin_top_left ? clip.y : (_sg.cur_pass.height - (clip.y + clip.h)));
@@ -20343,6 +20422,36 @@ SOKOL_API_IMPL sg_backend sg_query_backend(void) {
     return _sg.backend;
 }
 
+// seb added begin
+SOKOL_API_IMPL char* sg_query_backend_name(void) {
+    #if defined(SOKOL_GLCORE)
+        return "GLCore";
+    #elif defined(SOKOL_GLES3)
+        return "GLES 3";
+    #elif defined(SOKOL_METAL)
+        return "metal";
+    #elif defined(SOKOL_D3D11)
+        return "direct3D 11";
+    #elif defined(SOKOL_WGPU)
+        return "WebGPU";
+    #elif defined(SOKOL_DUMMY_BACKEND)
+        return "dummy"
+    #endif
+    // SOKOL_ASSERT(_sg.valid);
+    // switch(_sg.backend) {
+    //     case SG_BACKEND_GLCORE: return (char*) "GLCORE";
+    //     case SG_BACKEND_GLES3: return (char*) "GLES3";
+    //     case SG_BACKEND_D3D11: return (char*) "D3D11";
+    //     case SG_BACKEND_METAL_IOS: return (char*) "METAL_IOS";
+    //     case SG_BACKEND_METAL_MACOS: return (char*) "METAL_MACOS";
+    //     case SG_BACKEND_METAL_SIMULATOR: return (char*) "METAL_SIMULATOR";
+    //     case SG_BACKEND_WGPU: return (char*) "WGPU";
+    //     case SG_BACKEND_DUMMY: return (char*) "DUMMY";
+    // }
+    // return (char*) "Invalid";
+}
+// seb added end
+
 SOKOL_API_IMPL sg_features sg_query_features(void) {
     SOKOL_ASSERT(_sg.valid);
     return _sg.features;
@@ -20384,7 +20493,7 @@ SOKOL_API_IMPL int sg_query_row_pitch(sg_pixel_format fmt, int width, int row_al
 }
 
 SOKOL_API_IMPL int sg_query_surface_pitch(sg_pixel_format fmt, int width, int height, int row_align_bytes) {
-    SOKOL_ASSERT(_sg.valid);
+    // SOKOL_ASSERT(_sg.valid); // seb: removed this assert as we don't use any sokol state here afaik // SEB added
     SOKOL_ASSERT((width > 0) && (height > 0));
     SOKOL_ASSERT((row_align_bytes > 0) && _sg_ispow2(row_align_bytes));
     SOKOL_ASSERT(((int)fmt > SG_PIXELFORMAT_NONE) && ((int)fmt < _SG_PIXELFORMAT_NUM));
@@ -21769,6 +21878,7 @@ SOKOL_API_IMPL sg_pipeline_desc sg_query_pipeline_desc(sg_pipeline pip_id) {
         desc.sample_count = pip->cmn.sample_count;
         desc.blend_color = pip->cmn.blend_color;
         desc.alpha_to_coverage_enabled = pip->cmn.alpha_to_coverage_enabled;
+        desc.label = pip->cmn.label; // seb
     }
     return desc;
 }
