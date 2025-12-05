@@ -60,7 +60,7 @@ jobs:
           path: bindgen/sokol-rust
       - uses: actions/checkout@main
         with:
-          repository: kassane/sokol-d
+          repository: floooh/sokol-d
           path: bindgen/sokol-d
       - uses: actions/checkout@main
         with:
@@ -129,7 +129,9 @@ jobs:
       - uses: actions/checkout@main
         with:
           repository: floooh/sokol-zig
-      - uses: goto-bus-stop/setup-zig@v2
+      - uses: mlugg/setup-zig@v2
+        with:
+          version: 0.15.2
       - uses: actions/download-artifact@main
         with:
           name: ignore-me-zig
@@ -291,7 +293,7 @@ jobs:
     steps:
       - uses: actions/checkout@main
         with:
-          repository: kassane/sokol-d
+          repository: floooh/sokol-d
       - uses: egor-tensin/vs-shell@v2 # get cl.exe (default for Windows)
       - uses: dlang-community/setup-dlang@v2
         with:
@@ -319,6 +321,7 @@ jobs:
           dub build :instancingcompute
           dub build :mrt
           dub build :noninterleaved
+          dub build :nuklear
           dub build :offscreen
           dub build :quad
           dub build :shapes
@@ -371,7 +374,7 @@ jobs:
           repository: floooh/sokol-c3
       - uses: radekm/setup-c3@v2
         with:
-          version: v0.7.2
+          version: v0.7.7
       - uses: actions/download-artifact@main
         with:
           name: ignore-me-c3
@@ -466,6 +469,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
+          components: rustfmt
       - name: "cargo fmt"
         run: cargo fmt
       - name: "commit and push"
@@ -484,7 +488,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: kassane/sokol-d
+          repository: floooh/sokol-d
           ssh-key: ${{ secrets.GHACTIONS_D_PUSH }}
       - uses: actions/download-artifact@v4
         with:
