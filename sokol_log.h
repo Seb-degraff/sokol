@@ -184,6 +184,8 @@ SOKOL_LOG_API_DECL void slog_func(const char* tag, uint32_t log_level, uint32_t 
     #define _SLOG_ANDROID (1)
 #elif defined(__linux__) || defined(__unix__)
     #define _SLOG_LINUX (1)
+#elif defined(NN_NINTENDO_SDK) // SEB added
+    #define _SLOG_NX (1) // SEB added
 #else
 #error "sokol_log.h: unknown platform"
 #endif
