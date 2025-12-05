@@ -2,6 +2,16 @@
 #define SOKOL_APP_IMPL
 #endif
 #ifndef SOKOL_APP_INCLUDED
+
+// SEB added
+#ifdef rdx_prof_push
+    #define sapp_rdx_prof_push(a) rdx_prof_push(a)
+    #define sapp_rdx_prof_pop() rdx_prof_pop()
+#else
+    #define sapp_rdx_prof_push(a)
+    #define sapp_rdx_prof_pop()
+#endif
+
 /*
     sokol_app.h -- cross-platform application wrapper
 
@@ -1808,6 +1818,8 @@ typedef struct sapp_desc {
     void (*cleanup_userdata_cb)(void*);
     void (*event_userdata_cb)(const sapp_event*, void*);
 
+    int pos_x; // SEB
+    int pos_y; // SEB
     int width;                          // the preferred width of the window / canvas
     int height;                         // the preferred height of the window / canvas
     int sample_count;                   // MSAA sample count
@@ -2053,6 +2065,11 @@ inline void sapp_run(const sapp_desc& desc) { return sapp_run(&desc); }
 #ifdef SOKOL_APP_IMPL
 #define SOKOL_APP_IMPL_INCLUDED (1)
 
+// SEB START
+#include "rdx_track.h"
+#include "rdx_basic.h"
+// SEB END
+
 #if defined(SOKOL_MALLOC) || defined(SOKOL_CALLOC) || defined(SOKOL_FREE)
 #error "SOKOL_MALLOC/CALLOC/FREE macros are no longer supported, please use sapp_desc.allocator to override memory allocation functions"
 #endif
@@ -2134,6 +2151,10 @@ inline void sapp_run(const sapp_desc& desc) { return sapp_run(&desc); }
     #else
         #error("sokol_app.h: unknown 3D API selected for Linux, must be SOKOL_GLCORE, SOKOL_GLES3")
     #endif
+// SEB START
+#elif defined(NN_NINTENDO_SDK)
+    // look into sokol_app.nx.h
+// SEB END
 #else
 #error "sokol_app.h: Unknown platform"
 #endif
@@ -2221,7 +2242,7 @@ inline void sapp_run(const sapp_desc& desc) { return sapp_run(&desc); }
     #include <windowsx.h>
     #include <shellapi.h>
     #if !defined(SOKOL_NO_ENTRY)    // if SOKOL_NO_ENTRY is defined, it's the application's responsibility to use the right subsystem
-
+        #if defined(_MSC_VER) // NOTE: seb added
         #if defined(SOKOL_WIN32_FORCE_MAIN) && defined(SOKOL_WIN32_FORCE_WINMAIN)
             // If both are defined, it's the application's responsibility to use the right subsystem
         #elif defined(SOKOL_WIN32_FORCE_MAIN)
@@ -2229,17 +2250,22 @@ inline void sapp_run(const sapp_desc& desc) { return sapp_run(&desc); }
         #else
             #pragma comment (linker, "/subsystem:windows")
         #endif
+        #endif // Seb
     #endif
     #include <stdio.h>  /* freopen_s() */
     #include <wchar.h>  /* wcslen() */
 
-    #pragma comment (lib, "kernel32")
-    #pragma comment (lib, "user32")
-    #pragma comment (lib, "shell32")    /* CommandLineToArgvW, DragQueryFileW, DragFinished */
-    #pragma comment (lib, "gdi32")
+    #if defined(_MSC_VER) // NOTE: seb added
+        #pragma comment (lib, "kernel32")
+        #pragma comment (lib, "user32")
+        #pragma comment (lib, "shell32")    /* CommandLineToArgvW, DragQueryFileW, DragFinished */
+        #pragma comment (lib, "gdi32")
+    #endif
     #if defined(SOKOL_D3D11)
-        #pragma comment (lib, "dxgi")
-        #pragma comment (lib, "d3d11")
+        #if defined(_MSC_VER) // NOTE: seb added
+            #pragma comment (lib, "dxgi")
+            #pragma comment (lib, "d3d11")
+        #endif
     #endif
 
     #if defined(SOKOL_D3D11)
@@ -2428,6 +2454,14 @@ _SOKOL_PRIVATE double _sapp_timestamp_now(_sapp_timestamp_t* ts) {
         QueryPerformanceCounter(&qpc);
         const uint64_t now = (uint64_t)_sapp_int64_muldiv(qpc.QuadPart - ts->win.start.QuadPart, 1000000000, ts->win.freq.QuadPart);
         return (double)now / 1000000000.0;
+// SEB START
+    #elif defined(NN_NINTENDO_SDK)
+        // TODO: better to implement with nn::os::GetSystemTick?
+        struct timespec tspec;
+        clock_gettime(CLOCK_REALTIME, &tspec);
+        const uint64_t now = ((uint64_t)tspec.tv_sec*1000000000 + (uint64_t)tspec.tv_nsec) - ts->posix.start;
+        return (double)now / 1000000000.0;
+// SEB END
     #else
         struct timespec tspec;
         clock_gettime(_SAPP_CLOCK_MONOTONIC, &tspec);
@@ -2565,6 +2599,7 @@ typedef struct {
     _sapp_macos_window_delegate* win_dlg;
     _sapp_macos_view* view;
     NSCursor* cursors[_SAPP_MOUSECURSOR_NUM];
+    bool fullscreen_transition_in_progress; // Seb added
     #if defined(SOKOL_METAL)
         id<MTLDevice> mtl_device;
     #endif
@@ -2793,6 +2828,7 @@ typedef struct {
     EGLDisplay display;
     EGLContext context;
     EGLSurface surface;
+    bool (*gamepad_event_handler)(const AInputEvent*); // SEB ADDED, see https://github.com/floooh/sokol/pull/393/commits/ccf6f5551277a4dd0dfb6828409e7022bac0f435
 } _sapp_android_t;
 
 #endif // _SAPP_ANDROID
@@ -4056,6 +4092,7 @@ _SOKOL_PRIVATE void _sapp_macos_app_event(sapp_event_type type) {
     between HighDPI / LowDPI screens.
 */
 _SOKOL_PRIVATE void _sapp_macos_update_dimensions(void) {
+    rdx_prof_push("_sapp_macos_update_dimensions");
     if (_sapp.desc.high_dpi) {
         _sapp.dpi_scale = [_sapp.macos.window screen].backingScaleFactor;
     }
@@ -4095,6 +4132,7 @@ _SOKOL_PRIVATE void _sapp_macos_update_dimensions(void) {
         _sapp.window_height = 1;
     }
     if (dim_changed) {
+        //rdx_log("Dim changed to %i by %i", _sapp.framebuffer_width, _sapp.framebuffer_height);  // Seb added
         #if defined(SOKOL_METAL)
             CGSize drawable_size = { (CGFloat) _sapp.framebuffer_width, (CGFloat) _sapp.framebuffer_height };
             _sapp.macos.view.drawableSize = drawable_size;
@@ -4105,6 +4143,7 @@ _SOKOL_PRIVATE void _sapp_macos_update_dimensions(void) {
             _sapp_macos_app_event(SAPP_EVENTTYPE_RESIZED);
         }
     }
+    sapp_rdx_prof_pop();
 }
 
 _SOKOL_PRIVATE void _sapp_macos_toggle_fullscreen(void) {
@@ -4245,7 +4284,7 @@ _SOKOL_PRIVATE void _sapp_macos_set_icon(const sapp_icon_desc* icon_desc, int nu
         kCGImageAlphaLast | kCGImageByteOrderDefault,  // bitmapInfo
         cg_data_provider,           // provider
         NULL,                       // decode
-        false,                      // shouldInterpolate
+        true,                      // shouldInterpolate // SEB modified
         kCGRenderingIntentDefault);
     CFRelease(cf_data);
     CGDataProviderRelease(cg_data_provider);
@@ -4267,6 +4306,7 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
 
 @implementation _sapp_macos_app_delegate
 - (void)applicationDidFinishLaunching:(NSNotification*)aNotification {
+    rdx_prof_push("applicationDidFinishLaunching");
     _SOKOL_UNUSED(aNotification);
     _sapp_macos_init_cursors();
     if ((_sapp.window_width == 0) || (_sapp.window_height == 0)) {
@@ -4284,27 +4324,35 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
         NSWindowStyleMaskClosable |
         NSWindowStyleMaskMiniaturizable |
         NSWindowStyleMaskResizable;
-    NSRect window_rect = NSMakeRect(0, 0, _sapp.window_width, _sapp.window_height);
+    NSRect window_rect = NSMakeRect(_sapp.desc.pos_x, _sapp.desc.pos_y, _sapp.window_width, _sapp.window_height); // SEB added pos x and pos y
+    sapp_rdx_prof_push("_sapp_macos_window alloc initWithContentRect"); // SEB
     _sapp.macos.window = [[_sapp_macos_window alloc]
         initWithContentRect:window_rect
         styleMask:style
         backing:NSBackingStoreBuffered
         defer:NO];
+    sapp_rdx_prof_pop(); // SEB
     _sapp.macos.window.releasedWhenClosed = NO; // this is necessary for proper cleanup in applicationWillTerminate
     _sapp.macos.window.title = [NSString stringWithUTF8String:_sapp.window_title];
     _sapp.macos.window.acceptsMouseMovedEvents = YES;
     _sapp.macos.window.restorable = YES;
 
+    sapp_rdx_prof_push("[[_sapp_macos_window_delegate alloc] init]"); // SEB
     _sapp.macos.win_dlg = [[_sapp_macos_window_delegate alloc] init];
+    sapp_rdx_prof_pop(); // SEB
     _sapp.macos.window.delegate = _sapp.macos.win_dlg;
     #if defined(SOKOL_METAL)
         NSInteger max_fps = 60;
         #if (__MAC_OS_X_VERSION_MAX_ALLOWED >= 120000)
         if (@available(macOS 12.0, *)) {
+            sapp_rdx_prof_push("NSScreen.mainScreen maximumFramesPerSecond");
             max_fps = [NSScreen.mainScreen maximumFramesPerSecond];
+            sapp_rdx_prof_pop();
         }
         #endif
+        sapp_rdx_prof_push("MTLCreateSystemDefaultDevice");
         _sapp.macos.mtl_device = MTLCreateSystemDefaultDevice();
+        sapp_rdx_prof_pop();
         _sapp.macos.view = [[_sapp_macos_view alloc] init];
         [_sapp.macos.view updateTrackingAreas];
         _sapp.macos.view.preferredFramesPerSecond = max_fps / _sapp.swap_interval;
@@ -4314,8 +4362,10 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
         _sapp.macos.view.sampleCount = (NSUInteger) _sapp.sample_count;
         _sapp.macos.view.autoResizeDrawable = false;
         _sapp.macos.window.contentView = _sapp.macos.view;
+        sapp_rdx_prof_push("[_sapp.macos.window makeFirstResponder:_sapp.macos.view]");
         [_sapp.macos.window makeFirstResponder:_sapp.macos.view];
-        _sapp.macos.view.layer.magnificationFilter = kCAFilterNearest;
+        sapp_rdx_prof_pop();
+        //_sapp.macos.view.layer.magnificationFilter = kCAFilterNearest; // SEB: commented out to eleminate dependency on Qwartz. Might be pointless as it's probably dynamically linked as a dep of other frameworks
     #elif defined(SOKOL_GLCORE)
         NSOpenGLPixelFormatAttribute attrs[32];
         int i = 0;
@@ -4369,7 +4419,9 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
         [[NSRunLoop currentRunLoop] addTimer:timer_obj forMode:NSDefaultRunLoopMode];
         timer_obj = nil;
     #endif
-    [_sapp.macos.window center];
+    if (_sapp.desc.pos_x == 0 && _sapp.desc.pos_y == 0) { // NOTE(seb): if the position the user wants to pass is actually zero, we shouldn't center. TODO: add a flag to indicate we're passing a valid position?
+        [_sapp.macos.window center];
+    }
     _sapp.valid = true;
     NSApp.activationPolicy = NSApplicationActivationPolicyRegular;
     if (_sapp.fullscreen) {
@@ -4379,7 +4431,9 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
     [NSApp activateIgnoringOtherApps:YES];
     [_sapp.macos.window makeKeyAndOrderFront:nil];
     _sapp_macos_update_dimensions();
+    sapp_rdx_prof_push("NSEvent setMouseCoalescingEnabled:NO");
     [NSEvent setMouseCoalescingEnabled:NO];
+    sapp_rdx_prof_pop();
 
     // workaround for window not being focused during a long init callback
     // for details see: https://github.com/floooh/sokol/pull/982
@@ -4394,6 +4448,13 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
         data1:0
         data2:0];
     [NSApp postEvent:focusevent atStart:YES];
+    rdx_prof_pop();
+
+    // SEB ADDED
+    // Update the mouse position so the app knows where the cursor is before the
+    // mouse is actually moved. An event is sent in _sapp_frame. 
+    _sapp_macos_mouse_update_from_nspoint([_sapp.macos.window mouseLocationOutsideOfEventStream], true);
+    // END SEB ADDED
 }
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication*)sender {
@@ -4434,18 +4495,21 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
 
 #if defined(SOKOL_METAL)
 - (void)windowWillStartLiveResize:(NSNotification *)notification {
+    // rdx_log_error("Will start live resize!!!");  // Seb added
     // Work around the MTKView resizing glitch by "anchoring" the layer to the window corner opposite
     // to the currently manipulated corner (or edge). This prevents the content stretching back and
     // forth during resizing. This is a workaround for this issue: https://github.com/floooh/sokol/issues/700
     // Can be removed if/when migrating to CAMetalLayer: https://github.com/floooh/sokol/issues/727
     bool resizing_from_left = _sapp.mouse.x < _sapp.window_width/2;
     bool resizing_from_top = _sapp.mouse.y < _sapp.window_height/2;
-    NSViewLayerContentsPlacement placement;
-    if (resizing_from_left) {
-        placement = resizing_from_top ? NSViewLayerContentsPlacementBottomRight : NSViewLayerContentsPlacementTopRight;
-    } else {
-        placement = resizing_from_top ? NSViewLayerContentsPlacementBottomLeft : NSViewLayerContentsPlacementTopLeft;
-    }
+    NSViewLayerContentsPlacement placement = NSViewLayerContentsPlacementScaleAxesIndependently;
+    if (!_sapp.macos.fullscreen_transition_in_progress) {  // Seb added
+        if (resizing_from_left) {
+            placement = resizing_from_top ? NSViewLayerContentsPlacementBottomRight : NSViewLayerContentsPlacementTopRight;
+        } else {
+            placement = resizing_from_top ? NSViewLayerContentsPlacementBottomLeft : NSViewLayerContentsPlacementTopLeft;
+        }
+    }  // Seb added
     _sapp.macos.view.layerContentsPlacement = placement;
 }
 #endif
@@ -4453,6 +4517,7 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
 - (void)windowDidResize:(NSNotification*)notification {
     _SOKOL_UNUSED(notification);
     _sapp_macos_update_dimensions();
+    //_sapp.macos.fullscreen_transition_in_progress = false;  // Seb added
 }
 
 - (void)windowDidChangeScreen:(NSNotification*)notification {
@@ -4481,15 +4546,32 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
     _sapp_macos_app_event(SAPP_EVENTTYPE_UNFOCUSED);
 }
 
+- (void)windowWillEnterFullScreen:(NSNotification *)notification {  // Seb added
+    _sapp.macos.fullscreen_transition_in_progress = true;  // Seb added
+}  // Seb added
+
 - (void)windowDidEnterFullScreen:(NSNotification*)notification {
     _SOKOL_UNUSED(notification);
+    _sapp.macos.fullscreen_transition_in_progress = false;  // Seb added
     _sapp.fullscreen = true;
 }
 
+- (void)windowWillExitFullScreen:(NSNotification *)notification {  // Seb added
+    _sapp.macos.fullscreen_transition_in_progress = true;  // Seb added
+}  // Seb added
+
 - (void)windowDidExitFullScreen:(NSNotification*)notification {
     _SOKOL_UNUSED(notification);
+    _sapp.macos.fullscreen_transition_in_progress = false;  // Seb added
     _sapp.fullscreen = false;
 }
+
+// Called when the window is "zoomed", often done by option-clicking the green button or double-clicking title bar
+// - (NSRect) windowWillUseStandardFrame:(NSWindow *) window defaultFrame:(NSRect) defaultFrame { // Seb added
+//     _sapp.macos.fullscreen_transition_in_progress = true; // Seb added
+//     return defaultFrame; // Seb added
+// } // Seb added
+
 @end
 
 @implementation _sapp_macos_window
@@ -4607,6 +4689,7 @@ _SOKOL_PRIVATE void _sapp_macos_poll_input_events(void) {
 
 - (void)drawRect:(NSRect)rect {
     _SOKOL_UNUSED(rect);
+    //rdx_prof_push("_sapp_macos_view drawRect");
     #if defined(_SAPP_ANY_GL)
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, (GLint*)&_sapp.gl.framebuffer);
     #endif
@@ -4619,6 +4702,7 @@ _SOKOL_PRIVATE void _sapp_macos_poll_input_events(void) {
     #if defined(_SAPP_ANY_GL)
     [[_sapp.macos.view openGLContext] flushBuffer];
     #endif
+    //rdx_prof_pop();
 }
 
 - (BOOL)isOpaque {
@@ -4845,6 +4929,9 @@ static void _sapp_gl_make_current(void) {
             false,
             _sapp_macos_mods(event));
     }
+}
+- (void)cursorUpdate:(NSEvent *)event {
+    _sapp_macos_update_cursor(_sapp.mouse.current_cursor, _sapp.mouse.current_cursor_image, _sapp.mouse.shown);
 }
 @end
 
@@ -6041,12 +6128,21 @@ _SOKOL_PRIVATE void _sapp_emsc_webgl_init(void) {
     attrs.preserveDrawingBuffer = _sapp.desc.html5_preserve_drawing_buffer;
     attrs.enableExtensionsByDefault = true;
     attrs.majorVersion = 2;
+
+    // SEB START
+    //attrs.powerPreference = EM_WEBGL_POWER_PREFERENCE_LOW_POWER;
+    attrs.powerPreference = EM_WEBGL_POWER_PREFERENCE_HIGH_PERFORMANCE;
+    // SEB END
+
     EMSCRIPTEN_WEBGL_CONTEXT_HANDLE ctx = emscripten_webgl_create_context(_sapp.html5_canvas_selector, &attrs);
     // FIXME: error message?
     emscripten_webgl_make_context_current(ctx);
     glGetIntegerv(GL_FRAMEBUFFER_BINDING, (GLint*)&_sapp.gl.framebuffer);
+    //SEB: todo: add extention EXT_disjoint_timer_query https://registry.khronos.org/webgl/extensions/
 }
 #endif
+
+#if defined(SOKOL_WGPU)
 
 _SOKOL_PRIVATE void _sapp_emsc_register_eventhandlers(void) {
     // NOTE: HTML canvas doesn't receive input focus, this is why key event handlers are added
@@ -7903,7 +7999,10 @@ _SOKOL_PRIVATE void _sapp_win32_create_window(void) {
     wndclassw.lpfnWndProc = (WNDPROC) _sapp_win32_wndproc;
     wndclassw.hInstance = GetModuleHandleW(NULL);
     wndclassw.hCursor = LoadCursor(NULL, IDC_ARROW);
-    wndclassw.hIcon = LoadIcon(NULL, IDI_WINLOGO);
+    wndclassw.hIcon = LoadIcon(wndclassw.hInstance, MAKEINTRESOURCE(124)); // seb
+    if (wndclassw.hIcon == 0) { // seb
+        wndclassw.hIcon = LoadIcon(NULL, IDI_WINLOGO); // seb
+    } // seb
     wndclassw.lpszClassName = L"SOKOLAPP";
     RegisterClassW(&wndclassw);
 
@@ -8664,7 +8763,10 @@ _SOKOL_PRIVATE bool _sapp_android_key_event(const AInputEvent* e) {
            so the app can ask the user for confirmation, this is currently
            generally missing in sokol_app.h
         */
-        _sapp_android_shutdown();
+        // SEB START
+        // SEB TODO
+        // _sapp_android_shutdown();
+        // SEB END
         return true;
     }
     return false;
@@ -10806,7 +10908,7 @@ _SOKOL_PRIVATE const char* _sapp_x11_get_clipboard_string(void) {
     XEvent event;
     while (!XCheckTypedWindowEvent(_sapp.x11.display, _sapp.x11.window, SelectionNotify, &event)) {
         // Wait for event data to arrive on the X11 display socket
-        struct pollfd fd = { ConnectionNumber(_sapp.x11.display), POLLIN };
+        struct pollfd fd = { ConnectionNumber(_sapp.x11.display), POLLIN, 0 }; // seb: added 0 bc `error: missing field 'revents' initializer [-Werror,-Wmissing-field-initializers]`
         while (!XPending(_sapp.x11.display)) {
             poll(&fd, 1, -1);
         }
@@ -11894,6 +11996,11 @@ int main(int argc, char* argv[]) {
 #endif /* SOKOL_NO_ENTRY */
 #endif /* _SAPP_LINUX */
 
+// NX implementation in separate file for NDA reasons.
+#if defined(NN_NINTENDO_SDK)
+    #include "sokol_app.nx.h"
+#endif
+
 // ██████  ██    ██ ██████  ██      ██  ██████
 // ██   ██ ██    ██ ██   ██ ██      ██ ██
 // ██████  ██    ██ ██████  ██      ██ ██
@@ -11914,6 +12021,8 @@ SOKOL_API_IMPL void sapp_run(const sapp_desc* desc) {
         _sapp_win32_run(desc);
     #elif defined(_SAPP_LINUX)
         _sapp_linux_run(desc);
+    #elif defined(NN_NINTENDO_SDK) // SEB added
+        _sapp_nx_run(desc); // SEB added
     #else
     #error "sapp_run() not supported on this platform"
     #endif
@@ -12294,7 +12403,9 @@ SOKOL_API_IMPL const void* sapp_metal_get_current_drawable(void) {
     SOKOL_ASSERT(_sapp.valid);
     #if defined(SOKOL_METAL)
         #if defined(_SAPP_MACOS)
+            sapp_rdx_prof_push("currentDrawable"); // SEB ADDED
             const void* obj = (__bridge const void*) [_sapp.macos.view currentDrawable];
+            sapp_rdx_prof_pop(); // SEB ADDED
         #else
             const void* obj = (__bridge const void*) [_sapp.ios.view currentDrawable];
         #endif
@@ -12540,3 +12651,5 @@ SOKOL_API_IMPL void sapp_html5_ask_leave_site(bool ask) {
 }
 
 #endif /* SOKOL_APP_IMPL */
+
+#include "rdx_sokol_app_ext.h" // SEB added
