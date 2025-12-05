@@ -687,6 +687,8 @@ inline void saudio_setup(const saudio_desc& desc) { return saudio_setup(&desc); 
     #define _SAUDIO_ANDROID (1)
 #elif defined(__linux__) || defined(__unix__)
     #define _SAUDIO_LINUX (1)
+#elif defined(NN_NINTENDO_SDK) // SEB added
+    #define _SAUDIO_NX (1) // SEB added
 #else
 #error "sokol_audio.h: Unknown platform"
 #endif
@@ -704,8 +706,10 @@ inline void saudio_setup(const saudio_desc& desc) { return saudio_setup(&desc); 
     #endif
     #include <windows.h>
     #include <synchapi.h>
+    #if defined(_MSC_VER) // NOTE: seb added
     #pragma comment (lib, "kernel32")
     #pragma comment (lib, "ole32")
+    #endif // NOTE: seb added
     #ifndef CINTERFACE
     #define CINTERFACE
     #endif
@@ -914,6 +918,9 @@ extern _saudio_OSStatus AudioQueueAllocateBuffer(_saudio_AudioQueueRef inAQ, uin
 extern _saudio_OSStatus AudioQueueEnqueueBuffer(_saudio_AudioQueueRef inAQ, _saudio_AudioQueueBufferRef inBuffer, uint32_t inNumPacketDescs, const _saudio_AudioStreamPacketDescription* inPacketDescs);
 extern _saudio_OSStatus AudioQueueStart(_saudio_AudioQueueRef inAQ, const _saudio_AudioTimeStamp * inStartTime);
 extern _saudio_OSStatus AudioQueueStop(_saudio_AudioQueueRef inAQ, bool inImmediate);
+extern void* CFRunLoopGetCurrent(void); // Seb
+// extern void* CFRunLoopGetMain(void); // Seb
+extern void* CFRunLoopRun(void); // Seb
 
 #ifdef __cplusplus
 } // extern "C"
@@ -974,7 +981,10 @@ typedef struct {
 typedef struct {
     uint8_t* buffer;
 } _saudio_web_backend_t;
-
+// SEB START
+#elif defined(NN_NINTENDO_SDK)
+// nothing, we include in rdx_sokol_audio_nx.c
+// SEB END
 #else
 #error "unknown platform"
 #endif
@@ -1177,6 +1187,10 @@ _SOKOL_PRIVATE void _saudio_mutex_lock(_saudio_mutex_t* m) {
 _SOKOL_PRIVATE void _saudio_mutex_unlock(_saudio_mutex_t* m) {
     LeaveCriticalSection(&m->critsec);
 }
+
+// SEB START
+#elif defined(NN_NINTENDO_SDK)
+// SEB END
 #else
 #error "sokol_audio.h: unknown platform!"
 #endif
@@ -1688,7 +1702,8 @@ _SOKOL_PRIVATE bool _saudio_wasapi_backend_init(void) {
     _saudio.backend.thread.src_buffer = (float*) _saudio_malloc((size_t)_saudio.backend.thread.src_buffer_byte_size);
 
     /* create streaming thread */
-    _saudio.backend.thread.thread_handle = CreateThread(NULL, 0, _saudio_wasapi_thread_fn, 0, 0, 0);
+    _saudio.backend.thread.thread_handle = GetCurrentThread();
+    //_saudio.backend.thread.thread_handle = CreateThread(NULL, 0, _saudio_wasapi_thread_fn, 0, 0, 0);
     if (0 == _saudio.backend.thread.thread_handle) {
         _SAUDIO_ERROR(WASAPI_CREATE_THREAD_FAILED);
         goto error;
@@ -1966,6 +1981,7 @@ _SOKOL_PRIVATE bool _saudio_aaudio_backend_init(void) {
     AAudioStreamBuilder_setFramesPerDataCallback(_saudio.backend.builder, _saudio.buffer_frames);
     AAudioStreamBuilder_setDataCallback(_saudio.backend.builder, _saudio_aaudio_data_callback, 0);
     AAudioStreamBuilder_setErrorCallback(_saudio.backend.builder, _saudio_aaudio_error_callback, 0);
+    AAudioStreamBuilder_setPerformanceMode(_saudio.backend.builder, AAUDIO_PERFORMANCE_MODE_LOW_LATENCY); // seb added, because games feel better with low latency
 
     if (!_saudio_aaudio_start_stream()) {
         _saudio_aaudio_backend_shutdown();
@@ -2102,7 +2118,9 @@ _SOKOL_PRIVATE bool _saudio_coreaudio_backend_init(void) {
     fmt.mBytesPerFrame = (uint32_t)sizeof(float) * (uint32_t)_saudio.num_channels;
     fmt.mBytesPerPacket = fmt.mBytesPerFrame;
     fmt.mBitsPerChannel = 32;
-    _saudio_OSStatus res = AudioQueueNewOutput(&fmt, _saudio_coreaudio_callback, 0, NULL, NULL, 0, &_saudio.backend.ca_audio_queue);
+    void* runLoop = CFRunLoopGetCurrent(); // seb
+    _saudio_OSStatus res = AudioQueueNewOutput(&fmt, _saudio_coreaudio_callback, 0, runLoop, NULL, 0, &_saudio.backend.ca_audio_queue); // seb
+    //_saudio_OSStatus res = AudioQueueNewOutput(&fmt, _saudio_coreaudio_callback, 0, NULL, NULL, 0, &_saudio.backend.ca_audio_queue);
     if (0 != res) {
         _SAUDIO_ERROR(COREAUDIO_NEW_OUTPUT_FAILED);
         return false;
@@ -2137,6 +2155,12 @@ _SOKOL_PRIVATE bool _saudio_coreaudio_backend_init(void) {
     return true;
 }
 
+// SEB BEGIN
+/*=== NX IMPLEMENTATION ============================================*/
+#elif defined(NN_NINTENDO_SDK)
+#include "rdx_sokol_audio_nx.c"
+// SEB END
+
 #else
 #error "unsupported platform"
 #endif
@@ -2154,6 +2178,8 @@ bool _saudio_backend_init(void) {
         return _saudio_aaudio_backend_init();
     #elif defined(_SAUDIO_APPLE)
         return _saudio_coreaudio_backend_init();
+    #elif defined(_SAUDIO_NX) // SEB added
+        return _saudio_nx_backend_init(); // SEB added
     #else
     #error "unknown platform"
     #endif
@@ -2172,6 +2198,8 @@ void _saudio_backend_shutdown(void) {
         _saudio_aaudio_backend_shutdown();
     #elif defined(_SAUDIO_APPLE)
         _saudio_coreaudio_backend_shutdown();
+    #elif defined(_SAUDIO_NX) // SEB added
+        return _saudio_nx_backend_shutdown(); // SEB added
     #else
     #error "unknown platform"
     #endif
@@ -2201,7 +2229,12 @@ SOKOL_API_IMPL void saudio_setup(const saudio_desc* desc) {
     _saudio.num_packets = _saudio_def(_saudio.desc.num_packets, _SAUDIO_DEFAULT_NUM_PACKETS);
     _saudio.num_channels = _saudio_def(_saudio.desc.num_channels, 1);
     _saudio_fifo_init_mutex(&_saudio.fifo);
-    if (_saudio_backend_init()) {
+
+    rdx_prof2_push("_saudio_backend_init");
+        bool init_ok = _saudio_backend_init();
+    rdx_prof2_pop();
+
+    if (init_ok) {
         /* the backend might not support the requested exact buffer size,
            make sure the actual buffer size is still a multiple of
            the requested packet size
@@ -2214,6 +2247,10 @@ SOKOL_API_IMPL void saudio_setup(const saudio_desc* desc) {
         SOKOL_ASSERT(_saudio.bytes_per_frame > 0);
         _saudio_fifo_init(&_saudio.fifo, _saudio.packet_frames * _saudio.bytes_per_frame, _saudio.num_packets);
         _saudio.valid = true;
+
+        #if defined(_SAUDIO_WINDOWS)
+            _saudio_wasapi_thread_fn(0);
+        #endif
     }
     else {
         _saudio_fifo_destroy_mutex(&_saudio.fifo);
