@@ -1999,7 +1999,7 @@ extern "C" {
 // typedef struct sg_sampler       { uint32_t id; } sg_sampler;
 // typedef struct sg_shader        { uint32_t id; } sg_shader;
 // typedef struct sg_pipeline      { uint32_t id; } sg_pipeline;
-// typedef struct sg_attachments   { uint32_t id; } sg_attachments;
+// typedef struct sg_view          { uint32_t id; } sg_view;
 
 /*
     sg_range is a pointer-size-pair struct used to pass memory blobs into
@@ -5382,6 +5382,15 @@ SOKOL_GFX_API_DECL sg_gl_shader_info sg_gl_query_shader_info(sg_shader shd);
 // GL: get internal view resource objects
 SOKOL_GFX_API_DECL sg_gl_view_info sg_gl_query_view_info(sg_view view);
 
+// Utility functions to ease migration to views (SEB)
+static inline sg_view sg_make_view_from_image_desc(sg_image_desc* image_desc) { // SEB
+    return sg_make_view(&(sg_view_desc) { .texture.image = sg_make_image(image_desc) } ); // SEB
+} // SEB
+static inline void sg_destroy_view_and_image(sg_view view) { // SEB
+    sg_destroy_image(sg_query_view_image(view)); // SEB
+    sg_destroy_view(view); // SEB
+} // SEB
+
 #ifdef __cplusplus
 } // extern "C"
 
@@ -6171,6 +6180,7 @@ typedef struct {
     sg_image_usage usage;
     sg_pixel_format pixel_format;
     int sample_count;
+    char* label; // seb added
 } _sg_image_common_t;
 
 typedef struct {
@@ -8075,6 +8085,7 @@ _SOKOL_PRIVATE void _sg_image_common_init(_sg_image_common_t* cmn, const sg_imag
     cmn->usage = desc->usage;
     cmn->pixel_format = desc->pixel_format;
     cmn->sample_count = desc->sample_count;
+    cmn->label = desc->label; // seb added 
 }
 
 _SOKOL_PRIVATE void _sg_sampler_common_init(_sg_sampler_common_t* cmn, const sg_sampler_desc* desc) {
@@ -11441,7 +11452,7 @@ _SOKOL_PRIVATE void _sg_gl_begin_pass(const sg_pass* pass, const _sg_attachments
                 glGetQueryObjectuiv(current_query, GL_QUERY_RESULT, &result);
                 _sg.gl.frame_time_queries_waiting_for_frame++;
                 if (_sg.stats_enabled) {
-                    _sg.stats.gpu_duration = (double) result / 1000000000LL; // "All times returned are measured in nanoseconds" https://www.khronos.org/opengl/wiki/Query_Object
+                    _sg.stats.prev_frame.gpu_duration = (double) result / 1000000000LL; // "All times returned are measured in nanoseconds" https://www.khronos.org/opengl/wiki/Query_Object
                 }
                 //rdx_log("%i", result);
             }
@@ -16133,7 +16144,7 @@ _SOKOL_PRIVATE void _sg_mtl_begin_pass(const sg_pass* pass, const _sg_attachment
                 CFTimeInterval start = cmd_buf.GPUStartTime;
                 CFTimeInterval end = cmd_buf.GPUEndTime;
                 CFTimeInterval gpuRuntimeDuration = end - start;
-                _sg.stats.gpu_duration = gpuRuntimeDuration; // Hopefully it's not a problem to set a static variable like that from an unkown
+                _sg.stats.prev_frame.gpu_duration = gpuRuntimeDuration; // Hopefully it's not a problem to set a static variable like that from an unkown
                                                             // thread, but I think for that usage it's probably fine. -- seb
             }
             #endif
@@ -25951,6 +25962,7 @@ SOKOL_API_IMPL sg_image_desc sg_query_image_desc(sg_image img_id) {
         desc.usage = img->cmn.usage;
         desc.pixel_format = img->cmn.pixel_format;
         desc.sample_count = img->cmn.sample_count;
+        desc.label = img->cmn.label;
     }
     return desc;
 }

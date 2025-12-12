@@ -5752,7 +5752,6 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
         // Can be removed if/when migrating to CAMetalLayer: https://github.com/floooh/sokol/issues/727
         bool resizing_from_left = _sapp.mouse.x < _sapp.window_width/2;
         bool resizing_from_top = _sapp.mouse.y < _sapp.window_height/2;
-        NSViewLayerContentsPlacement placement;
         NSViewLayerContentsPlacement placement = NSViewLayerContentsPlacementScaleAxesIndependently;
         if (!_sapp.macos.fullscreen_transition_in_progress) {  // Seb added
             if (resizing_from_left) {
@@ -7558,8 +7557,6 @@ _SOKOL_PRIVATE void _sapp_emsc_webgl_init(void) {
     //SEB: todo: add extention EXT_disjoint_timer_query https://registry.khronos.org/webgl/extensions/
 }
 #endif
-
-#if defined(SOKOL_WGPU)
 
 _SOKOL_PRIVATE void _sapp_emsc_register_eventhandlers(void) {
     // NOTE: HTML canvas doesn't receive input focus, this is why key event handlers are added
