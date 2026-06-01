@@ -166,6 +166,7 @@ SOKOL_API_IMPL sg_environment sglue_environment(void) {
     res.d3d11.device = env.d3d11.device;
     res.d3d11.device_context = env.d3d11.device_context;
     res.wgpu.device = env.wgpu.device;
+    res.vulkan.instance = env.vulkan.instance;
     res.vulkan.physical_device = env.vulkan.physical_device;
     res.vulkan.device = env.vulkan.device;
     res.vulkan.queue = env.vulkan.queue;
@@ -177,6 +178,10 @@ SOKOL_API_IMPL sg_swapchain sglue_swapchain(void) {
     sg_swapchain res;
     memset(&res, 0, sizeof(res));
     const sapp_swapchain sc = sapp_get_swapchain();
+    res.invalid = sc.invalid;
+    if (res.invalid) {
+        return res;
+    }
     res.width = sc.width;
     res.height = sc.height;
     res.sample_count = sc.sample_count;

@@ -7,6 +7,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@main
+      - name: prepare vulkan sdk
+        uses: humbletim/setup-vulkan-sdk@main
+        with:
+          vulkan-query-version: 1.4.335.0
+          vulkan-components: Vulkan-Headers, Vulkan-Loader
+          vulkan-use-cache: true
       - name: test_win
         run: |
           cd tests
@@ -31,7 +37,7 @@ jobs:
       - name: prepare
         run: |
           sudo apt-get update
-          sudo apt-get install libgl1-mesa-dev libegl1-mesa-dev mesa-common-dev xorg-dev libasound-dev
+          sudo apt-get install libgl1-mesa-dev libegl1-mesa-dev mesa-common-dev xorg-dev libasound-dev libvulkan-dev
       - name: test_linux
         run: |
           cd tests
@@ -131,7 +137,7 @@ jobs:
           repository: floooh/sokol-zig
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.15.2
+          version: 0.16.0
       - uses: actions/download-artifact@main
         with:
           name: ignore-me-zig
@@ -374,7 +380,7 @@ jobs:
           repository: floooh/sokol-c3
       - uses: radekm/setup-c3@v2
         with:
-          version: v0.7.7
+          version: v0.7.8
       - uses: actions/download-artifact@main
         with:
           name: ignore-me-c3
