@@ -2098,6 +2098,8 @@ typedef enum sapp_mouse_cursor {
     SAPP_MOUSECURSOR_RESIZE_NESW,
     SAPP_MOUSECURSOR_RESIZE_ALL,
     SAPP_MOUSECURSOR_NOT_ALLOWED,
+    SAPP_MOUSECURSOR_GRAB, // @seb added
+    SAPP_MOUSECURSOR_GRABBING, // @seb added
     SAPP_MOUSECURSOR_CUSTOM_0,
     SAPP_MOUSECURSOR_CUSTOM_1,
     SAPP_MOUSECURSOR_CUSTOM_2,
@@ -2721,8 +2723,9 @@ _SOKOL_PRIVATE void _sapp_timing_put(_sapp_timing_t* t, double dur) {
     double max_dur = 0.1;
     // if we have enough samples for a useful average, use a much tighter 'valid window'
     if (_sapp_ring_full(&t->ring)) {
-        min_dur = t->avg * 0.8;
-        max_dur = t->avg * 1.2;
+        // NOTE(seb): increased range 0.8-1.2 to 0.6-1.4
+        min_dur = t->avg * 0.6;
+        max_dur = t->avg * 1.4;
     }
     if ((dur < min_dur) || (dur > max_dur)) {
         t->spike_count++;
@@ -4979,7 +4982,7 @@ _SOKOL_PRIVATE void _sapp_vk_frame(void) {
 // >>macos
 #if defined(_SAPP_MACOS)
 
-NSInteger _sapp_macos_max_fps(void) {
+static NSInteger _sapp_macos_max_fps(void) {
     NSInteger max_fps = 60;
     #if (__MAC_OS_X_VERSION_MAX_ALLOWED >= 120000)
     if (@available(macOS 12.0, *)) {
@@ -5289,6 +5292,8 @@ _SOKOL_PRIVATE void _sapp_macos_init_cursors(void) {
     _sapp.macos.standard_cursors[SAPP_MOUSECURSOR_RESIZE_NESW] = [NSCursor respondsToSelector:@selector(_windowResizeNorthEastSouthWestCursor)] ? [NSCursor _windowResizeNorthEastSouthWestCursor] : [NSCursor closedHandCursor];
     _sapp.macos.standard_cursors[SAPP_MOUSECURSOR_RESIZE_ALL] = [NSCursor closedHandCursor];
     _sapp.macos.standard_cursors[SAPP_MOUSECURSOR_NOT_ALLOWED] = [NSCursor operationNotAllowedCursor];
+    _sapp.macos.standard_cursors[SAPP_MOUSECURSOR_GRAB] = [NSCursor openHandCursor]; // seb, duplicate with SAPP_MOUSECURSOR_RESIZE_ALL
+    _sapp.macos.standard_cursors[SAPP_MOUSECURSOR_GRABBING] = [NSCursor closedHandCursor]; // seb
 }
 
 _SOKOL_PRIVATE void _sapp_macos_run(const sapp_desc* desc) {
@@ -6874,8 +6879,10 @@ EM_JS(void, sapp_js_set_cursor, (int cursor_type, int shown, int use_custom_curs
             case 6: cursor = "ns-resize"; break;    // SAPP_MOUSECURSOR_RESIZE_NS
             case 7: cursor = "nwse-resize"; break;  // SAPP_MOUSECURSOR_RESIZE_NWSE
             case 8: cursor = "nesw-resize"; break;  // SAPP_MOUSECURSOR_RESIZE_NESW
-            case 9: cursor = "all-scroll"; break;   // SAPP_MOUSECURSOR_RESIZE_ALL
+            case 9: cursor = "move"; break;         // SAPP_MOUSECURSOR_RESIZE_ALL // seb: changed all-scroll to move
             case 10: cursor = "not-allowed"; break; // SAPP_MOUSECURSOR_NOT_ALLOWED
+            case 11: cursor = "grab"; break;        // SAPP_MOUSECURSOR_GRAB, // seb
+            case 12: cursor = "grabbing"; break;    // SAPP_MOUSECURSOR_GRABBING, // seb
             default: cursor = "auto"; break;
         }
         Module.sapp_emsc_target.style.cursor = cursor;
@@ -8756,6 +8763,8 @@ _SOKOL_PRIVATE void _sapp_win32_init_cursor(sapp_mouse_cursor cursor) {
         case SAPP_MOUSECURSOR_RESIZE_NESW:      id = 32643; break;  // OCR_SIZENESW
         case SAPP_MOUSECURSOR_RESIZE_ALL:       id = 32646; break;  // OCR_SIZEALL
         case SAPP_MOUSECURSOR_NOT_ALLOWED:      id = 32648; break;  // OCR_NO
+        case SAPP_MOUSECURSOR_GRAB:             id = 32646; break;  // OCR_SIZEALL
+        case SAPP_MOUSECURSOR_GRABBING:         id = 32646; break;  // OCR_SIZEALL // seb TODO: check if we can embed the cursor with sokol_app somehow? Firefox and chrome bundle custom cursors for these... perhaps embed a byte array and call CreateIconFromResourceEx on it?
         default: break;
     }
     if (id != 0) {
@@ -9410,6 +9419,23 @@ _SOKOL_PRIVATE LRESULT CALLBACK _sapp_win32_wndproc(HWND hWnd, UINT uMsg, WPARAM
     return DefWindowProcW(hWnd, uMsg, wParam, lParam);
 }
 
+_SOKOL_PRIVATE float _sapp_win32_dpi_scale_for_window(HWND hWnd) {
+    SOKOL_ASSERT(_sapp.desc.high_dpi);
+    float ret = 1.0;
+    HINSTANCE user32 = LoadLibraryA("user32.dll");
+    if (user32) {
+        typedef UINT(WINAPI * GETDPIFORWINDOW_T)(HWND hwnd);
+        GETDPIFORWINDOW_T fn_getdpiforwindow = (GETDPIFORWINDOW_T)(void*)GetProcAddress(user32, "GetDpiForWindow");
+        if (fn_getdpiforwindow) {
+            UINT dpix = fn_getdpiforwindow(_sapp.win32.hwnd);
+            // NOTE: for high-dpi apps, mouse_scale remains one
+            ret = (float)dpix / 96.0f;
+            FreeLibrary(user32);
+        }
+    }
+    return ret;
+}
+
 _SOKOL_PRIVATE void _sapp_win32_create_window(void) {
     WNDCLASSW wndclassw;
     _sapp_clear(&wndclassw, sizeof(wndclassw));
@@ -9440,13 +9466,19 @@ _SOKOL_PRIVATE void _sapp_win32_create_window(void) {
     const int win_height = rect.bottom - rect.top;
     _sapp.win32.in_create_window = true;
     _sapp.win32.surrogate = 0;
+    int win_x = CW_USEDEFAULT; // seb
+    int win_y = SW_HIDE; // seb
+    if (_sapp.desc.pos_x != 0 || _sapp.desc.pos_y) { // seb
+        win_x = _sapp.desc.pos_x; // seb
+        win_y = _sapp.desc.pos_y; // seb // (NOTE: CW_USEDEFAULT is not used for position here, but internally calls ShowWindow!
+    } // seb
     _sapp.win32.hwnd = CreateWindowExW(
         win_ex_style,               // dwExStyle
         L"SOKOLAPP",                // lpClassName
         _sapp.window_title_wide,    // lpWindowName
         win_style,                  // dwStyle
-        CW_USEDEFAULT,              // X
-        SW_HIDE,                    // Y (NOTE: CW_USEDEFAULT is not used for position here, but internally calls ShowWindow!
+        win_x, // seb // CW_USEDEFAULT,              // X
+        win_y, // seb // SW_HIDE,                    // Y (NOTE: CW_USEDEFAULT is not used for position here, but internally calls ShowWindow!
         use_default_width ? CW_USEDEFAULT : win_width, // nWidth
         use_default_height ? CW_USEDEFAULT : win_height, // nHeight (NOTE: if width is CW_USEDEFAULT, height is actually ignored)
         NULL,                       // hWndParent
@@ -9470,6 +9502,13 @@ _SOKOL_PRIVATE void _sapp_win32_create_window(void) {
     }
     ShowWindow(_sapp.win32.hwnd, SW_SHOW);
     DragAcceptFiles(_sapp.win32.hwnd, 1);
+
+    if (_sapp.desc.high_dpi) { // seb
+        _sapp.win32.dpi.window_scale = _sapp_win32_dpi_scale_for_window(_sapp.win32.hwnd); // seb
+        _sapp.win32.dpi.content_scale = _sapp.win32.dpi.window_scale; // seb
+        _sapp.dpi_scale = _sapp.win32.dpi.content_scale; // seb
+        rdx_log_error("_sapp_win32_dpi_scale_for_window %f", _sapp.win32.dpi.window_scale); // seb
+    } // seb
 }
 
 _SOKOL_PRIVATE void _sapp_win32_destroy_window(void) {
@@ -9873,7 +9912,7 @@ _SOKOL_PRIVATE char** _sapp_win32_command_line_to_utf8_argv(LPWSTR w_command_lin
     return argv;
 }
 
-_SOKOL_PRIVATE bool _sapp_win32_make_custom_mouse_cursor(sapp_mouse_cursor cursor, const sapp_image_desc* desc) {
+_SOKOL_PRIVATE bool _sapp_win32_make_custom_mouse_cursor(sapp_mouse_cursor cursor, const sapp_image_desc* desc) { // seb
     SOKOL_ASSERT((cursor >= 0) && (cursor < _SAPP_MOUSECURSOR_NUM));
     SOKOL_ASSERT(0 == _sapp.win32.custom_cursors[cursor]);
     const HCURSOR win32_cursor = _sapp_win32_create_icon_from_image(desc, true);
@@ -9881,7 +9920,7 @@ _SOKOL_PRIVATE bool _sapp_win32_make_custom_mouse_cursor(sapp_mouse_cursor curso
     return win32_cursor != 0;
 }
 
-SOKOL_API_IMPL void _sapp_win32_destroy_custom_mouse_cursor(sapp_mouse_cursor cursor) {
+_SOKOL_PRIVATE void _sapp_win32_destroy_custom_mouse_cursor(sapp_mouse_cursor cursor) { // seb
     SOKOL_ASSERT((cursor >= 0) && (cursor < _SAPP_MOUSECURSOR_NUM));
     HCURSOR win32_cursor = _sapp.win32.custom_cursors[cursor];
     SOKOL_ASSERT(win32_cursor);
@@ -12266,6 +12305,8 @@ _SOKOL_PRIVATE void _sapp_x11_create_standard_cursors(void) {
     _sapp_x11_create_standard_cursor(SAPP_MOUSECURSOR_RESIZE_NESW, "nesw-resize", cursor_theme, size, 0);
     _sapp_x11_create_standard_cursor(SAPP_MOUSECURSOR_RESIZE_ALL, "all-scroll", cursor_theme, size, XC_fleur);
     _sapp_x11_create_standard_cursor(SAPP_MOUSECURSOR_NOT_ALLOWED, "no-allowed", cursor_theme, size, 0);
+    _sapp_x11_create_standard_cursor(SAPP_MOUSECURSOR_GRAB, "grab", cursor_theme, size, XC_hand2); // seb
+    _sapp_x11_create_standard_cursor(SAPP_MOUSECURSOR_GRABBING, "grabbing", cursor_theme, size, XC_fleur); // seb
     _sapp_x11_create_hidden_cursor();
 }
 

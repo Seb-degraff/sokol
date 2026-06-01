@@ -2509,7 +2509,7 @@ _SOKOL_PRIVATE void _saudio_n3ds_backend_shutdown(void) {
 #error "unsupported platform"
 #endif
 
-bool _saudio_backend_init(void) {
+static bool _saudio_backend_init(void) {
     #if defined(SOKOL_DUMMY_BACKEND)
         return _saudio_dummy_backend_init();
     #elif defined(_SAUDIO_LINUX)
@@ -2533,7 +2533,7 @@ bool _saudio_backend_init(void) {
     #endif
 }
 
-void _saudio_backend_shutdown(void) {
+static void _saudio_backend_shutdown(void) {
     #if defined(SOKOL_DUMMY_BACKEND)
         _saudio_dummy_backend_shutdown();
     #elif defined(_SAUDIO_LINUX)

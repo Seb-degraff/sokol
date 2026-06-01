@@ -1965,6 +1965,8 @@
 #define SOKOL_GFX_API_DECL extern
 #endif
 #endif
+#if defined(SOKOL_DLL) // Seb added dummy usage of SOKOL_DLL, to silence -Wunused-macros when not on windows.
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -2112,6 +2114,7 @@ typedef enum sg_backend {
         - for the Metal, D3D11 and WebGPU backends: SG_PIXELFORMAT_BGRA8
         - for GL backends: SG_PIXELFORMAT_RGBA8
 */
+#if 0 // NOTE(seb): now included in sokol_gfx_types.h
 typedef enum sg_pixel_format {
     _SG_PIXELFORMAT_DEFAULT,    // value 0 reserved for default-init
     SG_PIXELFORMAT_NONE,
@@ -2194,6 +2197,7 @@ typedef enum sg_pixel_format {
     _SG_PIXELFORMAT_NUM,
     _SG_PIXELFORMAT_FORCE_U32 = 0x7FFFFFFF
 } sg_pixel_format;
+#endif
 
 /*
     Runtime information about a pixel format, returned by sg_query_pixelformat().
