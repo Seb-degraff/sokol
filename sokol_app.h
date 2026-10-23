@@ -5457,17 +5457,11 @@ _SOKOL_PRIVATE id<CAMetalDrawable> _sapp_mtl_swapchain_next(void) {
 #define _SAPP_MACOS_MTL_OBSCURED_FRAME_DURATION_IN_SECONDS (0.0166667)
 
 _SOKOL_PRIVATE NSInteger _sapp_macos_max_fps(void) {
+    return [NSScreen.mainScreen maximumFramesPerSecond];
 }
 
 #if defined(SOKOL_METAL)
 
-    NSInteger max_fps = 60;
-    #if (__MAC_OS_X_VERSION_MAX_ALLOWED >= 120000)
-    if (@available(macOS 12.0, *)) {
-        max_fps = [NSScreen.mainScreen maximumFramesPerSecond];
-    }
-    #endif
-    return max_fps;
 _SOKOL_PRIVATE bool _sapp_macos_mtl_display_link_active(void) {
     return (nil != _sapp.mtl.display_link) && (!_sapp.mtl.display_link.paused);
 }
