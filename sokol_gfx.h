@@ -11328,6 +11328,7 @@ _SOKOL_PRIVATE GLenum _sg_gl_depth_stencil_attachment_type(const _sg_image_t* ds
 }
 
 _SOKOL_PRIVATE bool _sg_gl_check_framebuffer_status(void) {
+    #if !(defined(__EMSCRIPTEN__) && defined(NDEBUG)) // NOTE(seb): glCheckFramebufferStatus is quite slow on emscripten, it shows up high in chrome's sampling profiler. @cleanup check again after upgrading emscripten
     const GLenum fb_status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
     if (fb_status != GL_FRAMEBUFFER_COMPLETE) {
         switch (fb_status) {
@@ -11352,6 +11353,7 @@ _SOKOL_PRIVATE bool _sg_gl_check_framebuffer_status(void) {
         }
         return false;
     }
+    #endif
     return true;
 }
 
