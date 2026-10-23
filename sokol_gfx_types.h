@@ -9,6 +9,7 @@ typedef struct sg_shader        { uint32_t id; } sg_shader;
 typedef struct sg_pipeline      { uint32_t id; } sg_pipeline;
 typedef struct sg_view          { uint32_t id; } sg_view;
 
+// TODO: add back explicit underlying type `: uint32_t` when c/c++ vs code extention is updated to work with it.
 typedef enum sg_pixel_format {
     _SG_PIXELFORMAT_DEFAULT,    // value 0 reserved for default-init
     SG_PIXELFORMAT_NONE,
@@ -91,3 +92,84 @@ typedef enum sg_pixel_format {
     _SG_PIXELFORMAT_NUM,
     _SG_PIXELFORMAT_FORCE_U32 = 0x7FFFFFFF
 } sg_pixel_format;
+
+// TODO: move this as it probably shouldn't be duplicated across all compilation units
+static inline char* sg_pixel_format__to_str(sg_pixel_format val)
+{
+    switch(val) {
+        case _SG_PIXELFORMAT_DEFAULT: return "_SG_PIXELFORMAT_DEFAULT";
+        case SG_PIXELFORMAT_NONE: return "SG_PIXELFORMAT_NONE";
+        case SG_PIXELFORMAT_R8: return "SG_PIXELFORMAT_R8";
+        case SG_PIXELFORMAT_R8SN: return "SG_PIXELFORMAT_R8SN";
+        case SG_PIXELFORMAT_R8UI: return "SG_PIXELFORMAT_R8UI";
+        case SG_PIXELFORMAT_R8SI: return "SG_PIXELFORMAT_R8SI";
+        case SG_PIXELFORMAT_R16: return "SG_PIXELFORMAT_R16";
+        case SG_PIXELFORMAT_R16SN: return "SG_PIXELFORMAT_R16SN";
+        case SG_PIXELFORMAT_R16UI: return "SG_PIXELFORMAT_R16UI";
+        case SG_PIXELFORMAT_R16SI: return "SG_PIXELFORMAT_R16SI";
+        case SG_PIXELFORMAT_R16F: return "SG_PIXELFORMAT_R16F";
+        case SG_PIXELFORMAT_RG8: return "SG_PIXELFORMAT_RG8";
+        case SG_PIXELFORMAT_RG8SN: return "SG_PIXELFORMAT_RG8SN";
+        case SG_PIXELFORMAT_RG8UI: return "SG_PIXELFORMAT_RG8UI";
+        case SG_PIXELFORMAT_RG8SI: return "SG_PIXELFORMAT_RG8SI";
+        case SG_PIXELFORMAT_R32UI: return "SG_PIXELFORMAT_R32UI";
+        case SG_PIXELFORMAT_R32SI: return "SG_PIXELFORMAT_R32SI";
+        case SG_PIXELFORMAT_R32F: return "SG_PIXELFORMAT_R32F";
+        case SG_PIXELFORMAT_RG16: return "SG_PIXELFORMAT_RG16";
+        case SG_PIXELFORMAT_RG16SN: return "SG_PIXELFORMAT_RG16SN";
+        case SG_PIXELFORMAT_RG16UI: return "SG_PIXELFORMAT_RG16UI";
+        case SG_PIXELFORMAT_RG16SI: return "SG_PIXELFORMAT_RG16SI";
+        case SG_PIXELFORMAT_RG16F: return "SG_PIXELFORMAT_RG16F";
+        case SG_PIXELFORMAT_RGBA8: return "SG_PIXELFORMAT_RGBA8";
+        case SG_PIXELFORMAT_SRGB8A8: return "SG_PIXELFORMAT_SRGB8A8";
+        case SG_PIXELFORMAT_RGBA8SN: return "SG_PIXELFORMAT_RGBA8SN";
+        case SG_PIXELFORMAT_RGBA8UI: return "SG_PIXELFORMAT_RGBA8UI";
+        case SG_PIXELFORMAT_RGBA8SI: return "SG_PIXELFORMAT_RGBA8SI";
+        case SG_PIXELFORMAT_BGRA8: return "SG_PIXELFORMAT_BGRA8";
+        case SG_PIXELFORMAT_RGB10A2: return "SG_PIXELFORMAT_RGB10A2";
+        case SG_PIXELFORMAT_RG11B10F: return "SG_PIXELFORMAT_RG11B10F";
+        case SG_PIXELFORMAT_RGB9E5: return "SG_PIXELFORMAT_RGB9E5";
+        case SG_PIXELFORMAT_RG32UI: return "SG_PIXELFORMAT_RG32UI";
+        case SG_PIXELFORMAT_RG32SI: return "SG_PIXELFORMAT_RG32SI";
+        case SG_PIXELFORMAT_RG32F: return "SG_PIXELFORMAT_RG32F";
+        case SG_PIXELFORMAT_RGBA16: return "SG_PIXELFORMAT_RGBA16";
+        case SG_PIXELFORMAT_RGBA16SN: return "SG_PIXELFORMAT_RGBA16SN";
+        case SG_PIXELFORMAT_RGBA16UI: return "SG_PIXELFORMAT_RGBA16UI";
+        case SG_PIXELFORMAT_RGBA16SI: return "SG_PIXELFORMAT_RGBA16SI";
+        case SG_PIXELFORMAT_RGBA16F: return "SG_PIXELFORMAT_RGBA16F";
+        case SG_PIXELFORMAT_RGBA32UI: return "SG_PIXELFORMAT_RGBA32UI";
+        case SG_PIXELFORMAT_RGBA32SI: return "SG_PIXELFORMAT_RGBA32SI";
+        case SG_PIXELFORMAT_RGBA32F: return "SG_PIXELFORMAT_RGBA32F";
+        case SG_PIXELFORMAT_DEPTH: return "SG_PIXELFORMAT_DEPTH";
+        case SG_PIXELFORMAT_DEPTH_STENCIL: return "SG_PIXELFORMAT_DEPTH_STENCIL";
+        case SG_PIXELFORMAT_BC1_RGBA: return "SG_PIXELFORMAT_BC1_RGBA";
+        case SG_PIXELFORMAT_BC2_RGBA: return "SG_PIXELFORMAT_BC2_RGBA";
+        case SG_PIXELFORMAT_BC3_RGBA: return "SG_PIXELFORMAT_BC3_RGBA";
+        case SG_PIXELFORMAT_BC3_SRGBA: return "SG_PIXELFORMAT_BC3_SRGBA";
+        case SG_PIXELFORMAT_BC4_R: return "SG_PIXELFORMAT_BC4_R";
+        case SG_PIXELFORMAT_BC4_RSN: return "SG_PIXELFORMAT_BC4_RSN";
+        case SG_PIXELFORMAT_BC5_RG: return "SG_PIXELFORMAT_BC5_RG";
+        case SG_PIXELFORMAT_BC5_RGSN: return "SG_PIXELFORMAT_BC5_RGSN";
+        case SG_PIXELFORMAT_BC6H_RGBF: return "SG_PIXELFORMAT_BC6H_RGBF";
+        case SG_PIXELFORMAT_BC6H_RGBUF: return "SG_PIXELFORMAT_BC6H_RGBUF";
+        case SG_PIXELFORMAT_BC7_RGBA: return "SG_PIXELFORMAT_BC7_RGBA";
+        case SG_PIXELFORMAT_BC7_SRGBA: return "SG_PIXELFORMAT_BC7_SRGBA";
+        case SG_PIXELFORMAT_ETC2_RGB8: return "SG_PIXELFORMAT_ETC2_RGB8";
+        case SG_PIXELFORMAT_ETC2_SRGB8: return "SG_PIXELFORMAT_ETC2_SRGB8";
+        case SG_PIXELFORMAT_ETC2_RGB8A1: return "SG_PIXELFORMAT_ETC2_RGB8A1";
+        case SG_PIXELFORMAT_ETC2_RGBA8: return "SG_PIXELFORMAT_ETC2_RGBA8";
+        case SG_PIXELFORMAT_ETC2_SRGB8A8: return "SG_PIXELFORMAT_ETC2_SRGB8A8";
+        case SG_PIXELFORMAT_EAC_R11: return "SG_PIXELFORMAT_EAC_R11";
+        case SG_PIXELFORMAT_EAC_R11SN: return "SG_PIXELFORMAT_EAC_R11SN";
+        case SG_PIXELFORMAT_EAC_RG11: return "SG_PIXELFORMAT_EAC_RG11";
+        case SG_PIXELFORMAT_EAC_RG11SN: return "SG_PIXELFORMAT_EAC_RG11SN";
+        case SG_PIXELFORMAT_ASTC_4x4_RGBA: return "SG_PIXELFORMAT_ASTC_4x4_RGBA";
+        case SG_PIXELFORMAT_ASTC_4x4_SRGBA: return "SG_PIXELFORMAT_ASTC_4x4_SRGBA";
+        default: return "INVALID";
+    }
+}
+
+static inline char* sg_pixel_format_to_str_wrapper(void* val_ptr)
+{
+    return sg_pixel_format__to_str(*(sg_pixel_format*) val_ptr);
+}
