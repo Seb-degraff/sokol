@@ -9797,10 +9797,10 @@ _SOKOL_PRIVATE LRESULT CALLBACK _sapp_win32_wndproc(HWND hWnd, UINT uMsg, WPARAM
                 }
                 break;
             case WM_MOUSEWHEEL:
-                _sapp_win32_scroll_event(0.0f, (float)GET_WHEEL_DELTA_WPARAM(wParam) / (float)WHEEL_DELTA);
+                _sapp_win32_scroll_event(0.0f, ((float)GET_WHEEL_DELTA_WPARAM(wParam) / (float)WHEEL_DELTA) * 4); // seb: added * 4 to match old sokol_app. See https://github.com/floooh/sokol/issues/1441
                 break;
             case WM_MOUSEHWHEEL:
-                _sapp_win32_scroll_event(-(float)GET_WHEEL_DELTA_WPARAM(wParam) / (float)WHEEL_DELTA, 0.0f);
+                _sapp_win32_scroll_event((-(float)GET_WHEEL_DELTA_WPARAM(wParam) / (float)WHEEL_DELTA) * 4, 0.0f); // seb: added * 4 to match old sokol_app. See https://github.com/floooh/sokol/issues/1441
                 break;
             case WM_CHAR:
                 _sapp_win32_char_event((uint32_t)wParam, !!(lParam&0x40000000));
