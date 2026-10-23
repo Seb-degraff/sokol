@@ -5449,7 +5449,8 @@ static inline sg_view sg_make_view_from_image_desc(sg_image_desc* image_desc) { 
     return sg_make_view(&(sg_view_desc) { .texture.image = sg_make_image(image_desc) } ); // SEB
 } // SEB
 static inline void sg_destroy_view_and_image(sg_view view) { // SEB
-    sg_destroy_image(sg_query_view_image(view)); // SEB
+    sg_image image = sg_query_view_image(view); // SEB
+    sg_destroy_image(image); // SEB
     sg_destroy_view(view); // SEB
 } // SEB
 
@@ -16309,7 +16310,7 @@ _SOKOL_PRIVATE void _sg_mtl_begin_render_pass(const sg_pass* pass, const _sg_att
 }
 
 _SOKOL_PRIVATE void _sg_mtl_begin_pass(const sg_pass* pass, const _sg_attachments_ptrs_t* atts) {
-    rdx_prof_push("_sg_mtl_begin_pass");
+    sg_rdx_prof_push("_sg_mtl_begin_pass");
     SOKOL_ASSERT(pass && atts);
     SOKOL_ASSERT(_sg.mtl.cmd_queue);
     SOKOL_ASSERT(nil == _sg.mtl.compute_cmd_encoder);
@@ -16339,15 +16340,15 @@ _SOKOL_PRIVATE void _sg_mtl_begin_pass(const sg_pass* pass, const _sg_attachment
                 CFTimeInterval start = cmd_buf.GPUStartTime;
                 CFTimeInterval end = cmd_buf.GPUEndTime;
                 CFTimeInterval gpuRuntimeDuration = end - start;
-                _sg.stats.prev_frame.gpu_duration = gpuRuntimeDuration; // Hopefully it's not a problem to set a static variable like that from an unkown
+                _sg.stats.prev_frame.gpu_duration = gpuRuntimeDuration; // Hopefully it's not a problem to set a static variable like that from an unknown
                                                             // thread, but I think for that usage it's probably fine. -- seb
             }
             #endif
             // SEB added end
 
-            rdx_prof_push("dispatch_semaphore_signal");
+            //sg_rdx_prof_push("dispatch_semaphore_signal"); NOTE(seb): this callback can be called on a different thread, and so sg_rdx_prof_push might run on a thread were we didn't initialize the required threadlocal state, and crash the game.
             dispatch_semaphore_signal(_sg.mtl.sem);
-            rdx_prof_pop();
+            //sg_rdx_prof_pop();
         }];
     }
 
@@ -16367,7 +16368,7 @@ _SOKOL_PRIVATE void _sg_mtl_begin_pass(const sg_pass* pass, const _sg_attachment
     if (_sg.cur_pass.valid) {
         _sg_mtl_bind_uniform_buffers();
     }
-    rdx_prof_pop(); // "_sg_mtl_begin_pass"
+    sg_rdx_prof_pop(); // "_sg_mtl_begin_pass"
 }
 
 _SOKOL_PRIVATE void _sg_mtl_end_pass(const _sg_attachments_ptrs_t* atts) {
@@ -25433,6 +25434,7 @@ SOKOL_API_IMPL sg_buffer sg_make_buffer(const sg_buffer_desc* desc) {
 }
 
 SOKOL_API_IMPL sg_image sg_make_image(const sg_image_desc* desc) {
+    sg_rdx_prof_push("sg_make_image");
     SOKOL_ASSERT(_sg.valid);
     SOKOL_ASSERT(desc);
     sg_image_desc desc_def = _sg_image_desc_defaults(desc);
@@ -25444,6 +25446,7 @@ SOKOL_API_IMPL sg_image sg_make_image(const sg_image_desc* desc) {
         SOKOL_ASSERT((img->slot.state == SG_RESOURCESTATE_VALID) || (img->slot.state == SG_RESOURCESTATE_FAILED));
     }
     _SG_TRACE_ARGS(make_image, &desc_def, img_id);
+    sg_rdx_prof_pop(); // "sg_make_image"
     return img_id;
 }
 
