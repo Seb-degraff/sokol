@@ -5958,6 +5958,7 @@ _SOKOL_PRIVATE void _sapp_macos_frame(void) {
     _sapp.macos.window.title = [NSString stringWithUTF8String:_sapp.window_title];
     _sapp.macos.window.acceptsMouseMovedEvents = YES;
     _sapp.macos.window.restorable = YES;
+    _sapp.macos.window.backgroundColor = NSColor.blackColor; // SEB
 
     sapp_rdx_prof_push("[[_sapp_macos_window_delegate alloc] init]"); // SEB
     _sapp.macos.win_dlg = [[_sapp_macos_window_delegate alloc] init];
