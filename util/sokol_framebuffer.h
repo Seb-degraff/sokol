@@ -137,11 +137,11 @@
     framebuffer with 32-bits per pixel (SFB_FORMAT_RGBA8), use an uint32_t
     buffer like this:
 
-        uint32_t pixels[320][256];
+        uint32_t pixels[256][320];
 
     For the paletted format (1 byte per pixel and a 256 entry color palette):
 
-        uint8_t pixels[320][256];
+        uint8_t pixels[256][320];
         uint32_t palette[256];
 
     ...now 'render' into the pixel and palette buffers with the CPU.
@@ -162,36 +162,35 @@
     Whenever the pixel buffer or color palette content changes, call sfb_update()
     outside a sokol-gfx render pass, and ONLY ONCE PER FRAME at most:
 
-        sfb_update(&(sfb_update_desc){
+        sfb_update(fb, &(sfb_update_desc){
             .pixels = SG_RANGE(pixels),
             .palette = SG_RANGE(palette),
         });
 
     Of course for an RGBA8 framebuffer you'd only provide the pixels:
 
-        sfb_update(&(sfb_update_desc){
+        sfb_update(fb, &(sfb_update_desc){
             .pixels = SG_RANGE(pixels),
         });
 
     ...but even for a paletted framebuffer you can omit the data that doesn't
     change. E.g. when only the palette changes but not the pixel data:
 
-        sfb_update(&(sfb_update_desc){
+        sfb_update(fb, &(sfb_update_desc){
             .palette = SG_RANGE(palette),
         });
 
     ...or vice versa when only the pixels but not the palette entries change:
 
-        sfb_update(&(sfb_update_desc){
+        sfb_update(fb, &(sfb_update_desc){
             .pixels = SG_RANGE(pixels),
         });
 
-    The sfb_update() function will do up to two calls to the sokol-gfx
-    function sg_update_image() - once for the pixel data and once for the
-    palette data (this is why the function must only be called at most
-    once per frame), and then do an render pass into an internal color attachment
-    texture (this is why the function must be called outside any sokol-gfx
-    pass).
+    The sfb_update() function will do up to two image updates via a
+    write-transient staging buffer (e.g. sg_write_buffer_transient plus
+    sg_copy_buffer_to_image), once for the pixel data and once for the palette
+    data, and then do a render pass in into an internal color attachment texture
+    (this is why the function must be called outside any sokol-gfx pass).
 
     Finally, to render your framebuffer to the display, call sfb_render()
     *inside* a sokol-gfx render pass:
@@ -337,7 +336,7 @@ typedef struct sfb_framebuffer { uint32_t id; } sfb_framebuffer;
 /*
     sfb_resource_state
 
-    The state of a framebuffer object, obtainable via sfg_query_framebuffer_state().
+    The state of a framebuffer object, obtainable via sfb_query_framebuffer_state().
     Publicly visible values are only SFB_RESOURCESTATE_VALID
     and SFB_RESOURCESTATE_FAILED.
 */
@@ -4656,6 +4655,7 @@ typedef struct {
     bool rotate90;
     sfb_render_pass_desc render_pass;
     struct {
+        sg_buffer staging_buf;
         sg_image img;
         sg_view tex_view;
     } update;
@@ -4665,6 +4665,7 @@ typedef struct {
         sg_view att_view;
     } offscreen;
     struct {
+        sg_buffer staging_buf;
         sg_image img;
         sg_view tex_view;
     } palette;
@@ -4680,7 +4681,6 @@ typedef struct {
     int* free_queue;
 } _sfb_pool_t;
 
-#define _SFB_INVALID_SLOT_INDEX (0)
 typedef struct {
     _sfb_pool_t framebuffer_pool;
     _sfb_framebuffer_t* framebuffers;
@@ -4869,6 +4869,7 @@ static void _sfb_setup_pools(_sfb_pools_t* p, const sfb_desc* desc) {
 
 static void _sfb_discard_pools(_sfb_pools_t* p) {
     SOKOL_ASSERT(p);
+    SOKOL_ASSERT(p->framebuffers);
     _sfb_free(p->framebuffers); p->framebuffers = 0;
     _sfb_pool_discard(&p->framebuffer_pool);
 }
@@ -4946,33 +4947,47 @@ static sfb_desc _sfb_desc_defaults(const sfb_desc* desc) {
     return res;
 }
 
-static void _sfb_destroy_update_images_and_views(_sfb_framebuffer_t* fb) {
+static void _sfb_destroy_update_resources(_sfb_framebuffer_t* fb) {
     SOKOL_ASSERT(fb);
+    sg_destroy_buffer(fb->update.staging_buf);
     sg_destroy_image(fb->update.img);
     sg_destroy_view(fb->update.tex_view);
 }
 
-static void _sfb_destroy_offscreen_images_and_views(_sfb_framebuffer_t* fb) {
+static void _sfb_destroy_offscreen_resources(_sfb_framebuffer_t* fb) {
     SOKOL_ASSERT(fb);
     sg_destroy_image(fb->offscreen.img);
     sg_destroy_view(fb->offscreen.tex_view);
     sg_destroy_view(fb->offscreen.att_view);
 }
 
-static void _sfb_destroy_palette_images_and_views(_sfb_framebuffer_t* fb) {
+static void _sfb_destroy_palette_resources(_sfb_framebuffer_t* fb) {
     SOKOL_ASSERT(fb);
+    sg_destroy_buffer(fb->palette.staging_buf);
     sg_destroy_image(fb->palette.img);
     sg_destroy_view(fb->palette.tex_view);
 }
 
-static bool _sfb_create_update_images_and_views(_sfb_framebuffer_t* fb) {
+static bool _sfb_create_update_resources(_sfb_framebuffer_t* fb) {
     SOKOL_ASSERT(fb);
     bool valid = true;
+    const sg_pixel_format fmt = fb->format == SFB_FORMAT_RGBA8 ? SG_PIXELFORMAT_RGBA8 : SG_PIXELFORMAT_R8;
+    const size_t staging_size = (size_t)sg_query_surface_pitch(fmt, fb->width, fb->height, 1);
+    fb->update.staging_buf = sg_make_buffer(&(sg_buffer_desc){
+        .usage = {
+            .staging_buffer = true,
+            .write_transient = true,
+            .copy_src = true,
+        },
+        .size = staging_size,
+        .label = "sfb-update-staging-buffer",
+    });
+    valid &= sg_query_buffer_state(fb->update.staging_buf) == SG_RESOURCESTATE_VALID;
     fb->update.img = sg_make_image(&(sg_image_desc){
-        .usage.dynamic_update = true,
+        .usage.copy_dst = true,
         .width = fb->width,
         .height = fb->height,
-        .pixel_format = fb->format == SFB_FORMAT_RGBA8 ? SG_PIXELFORMAT_RGBA8 : SG_PIXELFORMAT_R8,
+        .pixel_format = fmt,
         .label = "sfb-update-image",
     });
     valid &= sg_query_image_state(fb->update.img) == SG_RESOURCESTATE_VALID;
@@ -4984,7 +4999,7 @@ static bool _sfb_create_update_images_and_views(_sfb_framebuffer_t* fb) {
     return valid;
 }
 
-static bool _sfb_create_offscreen_images_and_views(_sfb_framebuffer_t* fb) {
+static bool _sfb_create_offscreen_resources(_sfb_framebuffer_t* fb) {
     SOKOL_ASSERT(fb);
     bool valid = true;
     fb->offscreen.img = sg_make_image(&(sg_image_desc){
@@ -5008,15 +5023,27 @@ static bool _sfb_create_offscreen_images_and_views(_sfb_framebuffer_t* fb) {
     return valid;
 }
 
-static bool _sfb_create_palette_images_and_views(_sfb_framebuffer_t* fb) {
+static bool _sfb_create_palette_resources(_sfb_framebuffer_t* fb) {
     SOKOL_ASSERT(fb);
     bool valid = true;
     if (fb->format == SFB_FORMAT_PALETTE8) {
+        const sg_pixel_format fmt = SG_PIXELFORMAT_RGBA8;
+        const size_t staging_size = (size_t)sg_query_surface_pitch(fmt, 256, 1, 1);
+        fb->palette.staging_buf = sg_make_buffer(&(sg_buffer_desc){
+            .usage = {
+                .staging_buffer = true,
+                .write_transient = true,
+                .copy_src = true,
+            },
+            .size = staging_size,
+            .label = "sfb-palette-staging-buffer",
+        });
+        valid &= sg_query_buffer_state(fb->palette.staging_buf) == SG_RESOURCESTATE_VALID;
         fb->palette.img = sg_make_image(&(sg_image_desc){
-            .usage.dynamic_update = true,
+            .usage.copy_dst = true,
             .width = 256,
             .height = 1,
-            .pixel_format = SG_PIXELFORMAT_RGBA8,
+            .pixel_format = fmt,
             .label = "sfb-palette-img",
         });
         valid &= sg_query_image_state(fb->palette.img) == SG_RESOURCESTATE_VALID;
@@ -5052,9 +5079,9 @@ static void _sfb_init_framebuffer(_sfb_framebuffer_t* fb, const sfb_framebuffer_
     fb->rotate90 = desc->rotate90;
     fb->render_pass = desc->render_pass;
 
-    bool valid = _sfb_create_update_images_and_views(fb);
-    valid &= _sfb_create_offscreen_images_and_views(fb);
-    valid &= _sfb_create_palette_images_and_views(fb);
+    bool valid = _sfb_create_update_resources(fb);
+    valid &= _sfb_create_offscreen_resources(fb);
+    valid &= _sfb_create_palette_resources(fb);
     fb->offscreen_pip = sg_make_pipeline(&(sg_pipeline_desc){
         .shader = fb->format == SFB_FORMAT_PALETTE8 ? _sfb.shd.palette8 : _sfb.shd.rgba8,
         .depth.pixel_format = SG_PIXELFORMAT_NONE,
@@ -5075,9 +5102,9 @@ static void _sfb_init_framebuffer(_sfb_framebuffer_t* fb, const sfb_framebuffer_
 
 static void _sfb_uninit_framebuffer(_sfb_framebuffer_t* fb) {
     SOKOL_ASSERT(fb && ((fb->slot.state == SFB_RESOURCESTATE_VALID) || (fb->slot.state == SFB_RESOURCESTATE_FAILED)));
-    _sfb_destroy_palette_images_and_views(fb);
-    _sfb_destroy_offscreen_images_and_views(fb);
-    _sfb_destroy_update_images_and_views(fb);
+    _sfb_destroy_palette_resources(fb);
+    _sfb_destroy_offscreen_resources(fb);
+    _sfb_destroy_update_resources(fb);
     // it's ok to call the destroy funcs with invalid id or in failed state
     sg_destroy_pipeline(fb->offscreen_pip);
     sg_destroy_pipeline(fb->render_pip);
@@ -5590,10 +5617,10 @@ SOKOL_API_IMPL bool sfb_resize(sfb_framebuffer fb_id, const sfb_resize_desc* des
     if (fb) {
         if ((desc->width != fb->width) || (desc->height != fb->height)) {
             retval = true;
-            _sfb_destroy_update_images_and_views(fb);
+            _sfb_destroy_update_resources(fb);
             fb->width = desc->width;
             fb->height = desc->height;
-            bool res = _sfb_create_update_images_and_views(fb);
+            bool res = _sfb_create_update_resources(fb);
             if (!res) {
                 fb->slot.state = SFB_RESOURCESTATE_FAILED;
             }
@@ -5603,11 +5630,11 @@ SOKOL_API_IMPL bool sfb_resize(sfb_framebuffer fb_id, const sfb_resize_desc* des
         const int ch = _sfb_def(desc->cliprect.height, fb->height);
         if ((prescale != fb->prescale) || (cw != fb->cliprect.width) || (ch != fb->cliprect.height)) {
             retval = true;
-            _sfb_destroy_offscreen_images_and_views(fb);
+            _sfb_destroy_offscreen_resources(fb);
             fb->prescale = prescale;
-            fb->cliprect.width = desc->cliprect.width;
-            fb->cliprect.height = desc->cliprect.height;
-            bool res = _sfb_create_offscreen_images_and_views(fb);
+            fb->cliprect.width = cw;
+            fb->cliprect.height = ch;
+            bool res = _sfb_create_offscreen_resources(fb);
             if (!res) {
                 fb->slot.state = SFB_RESOURCESTATE_FAILED;
             }
@@ -5628,10 +5655,24 @@ SOKOL_API_IMPL void sfb_update(sfb_framebuffer fb_id, const sfb_update_desc* des
 
     // update dynamic textures
     if (desc->pixels.ptr) {
-        sg_update_image(fb->update.img, &(sg_image_data){ .mip_levels[0] = desc->pixels });
+        sg_write_buffer_transient(&(sg_write_buffer_desc){
+            .src.data = desc->pixels,
+            .dst.buffer = fb->update.staging_buf,
+        });
+        sg_copy_buffer_to_image(&(sg_copy_buffer_to_image_desc){
+            .src.buffer = fb->update.staging_buf,
+            .dst.image = fb->update.img,
+        });
     }
     if ((fb->format == SFB_FORMAT_PALETTE8) && desc->palette.ptr) {
-        sg_update_image(fb->palette.img, &(sg_image_data){ .mip_levels[0] = desc->palette });
+        sg_write_buffer_transient(&(sg_write_buffer_desc){
+            .src.data = desc->palette,
+            .dst.buffer = fb->palette.staging_buf,
+        });
+        sg_copy_buffer_to_image(&(sg_copy_buffer_to_image_desc){
+            .src.buffer = fb->palette.staging_buf,
+            .dst.image = fb->palette.img,
+        });
     }
 
     // do an offscreen pass into the offscreen image with nearest filtering,

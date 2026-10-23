@@ -1,3 +1,4 @@
+# LLM maintained.
 #-------------------------------------------------------------------------------
 #   gen_odin.py
 #
@@ -66,6 +67,7 @@ ignores = [
 # NOTE: syntax for function results: "func_name.RESULT"
 overrides = {
     'context':                              'ctx',  # reserved keyword
+    'sfetch_continue':                      'sfetch_continue_fetching',  # 'continue' is reserved in Odin
     'SGL_NO_ERROR':                         'SGL_ERROR_NO_ERROR',
 }
 
@@ -218,6 +220,12 @@ def is_const_struct_ptr(s):
             return True
     return False
 
+def is_struct_ptr(s):
+    for struct_type in struct_types:
+        if s == f"{struct_type} *":
+            return True
+    return False
+
 def type_default_value(s):
     return prim_defaults[s]
 
@@ -251,6 +259,8 @@ def map_type(type, prefix, sub_type):
             return f"{as_struct_or_enum_type(util.extract_ptr_type(type), prefix)}"
         else:
             return f"^{as_struct_or_enum_type(util.extract_ptr_type(type), prefix)}"
+    elif is_struct_ptr(type):
+        return f"^{as_struct_or_enum_type(util.extract_ptr_type(type), prefix)}"
     elif is_prim_ptr(type):
         return f"^{as_prim_type(util.extract_ptr_type(type))}"
     elif is_const_prim_ptr(type):
@@ -415,7 +425,7 @@ def gen_c_imports(inp):
             res_str = '' if res_type == '' else f'-> {res_type}'
             if decl.get('comment'):
                 c(decl['comment'], indent="    ")
-            l(f"    {as_snake_case(decl['name'], prefix)} :: proc({args}) {res_str} ---")
+            l(f"    {as_snake_case(check_override(decl['name']), prefix)} :: proc({args}) {res_str} ---")
     l('}')
     l('')
 

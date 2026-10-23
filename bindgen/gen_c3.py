@@ -1,3 +1,4 @@
+# LLM maintained.
 #-------------------------------------------------------------------------------
 #   gen_c3.py
 #
@@ -17,10 +18,17 @@ module_names = {
     'sapp_':    'sapp',
     'stm_':     'stm',
     'saudio_':  'saudio',
+    'sfetch_':  'sfetch',
+    'simgui_':  'simgui',
+    'sgimgui_': 'sgimgui',
+    'sappimgui_': 'sappimgui',
     'sgl_':     'sgl',
     'sdtx_':    'sdtx',
     'sshape_':  'sshape',
     'sglue_':   'sglue',
+    'sfb_':     'sfb',
+    'slbx_':    'slbx',
+    'scb_':     'scb',
 }
 
 ignores = [
@@ -33,6 +41,7 @@ ignores = [
 overrides = {
     # `any` is treated specially in C3.
     'any': '_any',
+    'sfetch_continue':                      'sfetch_continue_fetching',  # 'continue' is reserved in C3
     # Constants must be uppercase - lowercase `x` is not allowed.
     'SG_PIXELFORMAT_ASTC_4x4_RGBA': 'SG_PIXELFORMAT_ASTC_4X4_RGBA',
     'SG_PIXELFORMAT_ASTC_4x4_SRGBA': 'SG_PIXELFORMAT_ASTC_4X4_SRGBA',
@@ -108,10 +117,14 @@ aliases = {
         ("EventDataCb", "fn void(SappEvent*, void*)"),
     "void (*)(const sapp_html5_fetch_response *)":
         ("ResponseCb", "fn void(SappHtml5FetchResponse*)"),
+    "void (*)(const sfetch_response_t *)":
+        ("ResponseCb", "fn void(SfetchResponse*)"),
     "void (*)(float *, int, int)":
         ("StreamCb", "fn void(float*, CInt, CInt)"),
     "void (*)(float *, int, int, void *)":
         ("StreamDataCb", "fn void(float*, CInt, CInt, void*)"),
+    "bool (*)(const void *)":
+        ("NativeEventCb", "fn bool(void*)"),
 }
 
 struct_types = []
@@ -231,6 +244,12 @@ def is_const_struct_ptr(s):
             return True
     return False
 
+def is_struct_ptr(s):
+    for struct_type in struct_types:
+        if s == f"{struct_type} *":
+            return True
+    return False
+
 def type_default_value(s):
     return prim_defaults[s]
 
@@ -252,6 +271,8 @@ def map_type(type, prefix, sub_type):
     elif util.is_string_ptr(type):
         return "ZString"
     elif is_const_struct_ptr(type):
+        return f"{as_struct_or_enum_type(util.extract_ptr_type(type), prefix)}*"
+    elif is_struct_ptr(type):
         return f"{as_struct_or_enum_type(util.extract_ptr_type(type), prefix)}*"
     elif is_prim_ptr(type):
         return f"{as_prim_type(util.extract_ptr_type(type))}*"
@@ -325,7 +346,7 @@ def gen_enum(decl, prefix):
     tpe = "int"
     if any(as_enum_item_name(check_override(item['name'])) == 'FORCE_U32' for item in decl['items']):
         tpe = "uint"
-    l(f'enum {as_struct_or_enum_type(enum_name, prefix)} : const {tpe}')
+    l(f'constdef {as_struct_or_enum_type(enum_name, prefix)} : {tpe}')
     l('{')
     value = "-1"
     for item in decl['items']:
@@ -350,7 +371,7 @@ def gen_c_imports(inp):
             args = funcdecl_args_c(decl, prefix)
             res_type = funcdecl_result_c(decl, prefix)
             res_str = 'void' if res_type == '' else res_type
-            l(f'extern fn {res_str} {check_override(as_snake_case(decl["name"], prefix))}({args}) @cname("{decl["name"]}");')
+            l(f'extern fn {res_str} {as_snake_case(check_override(decl["name"]), prefix)}({args}) @cname("{decl["name"]}");')
     l('')
 
 def gen_function_pointer_aliases():

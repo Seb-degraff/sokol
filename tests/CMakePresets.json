@@ -7,6 +7,57 @@
     },
     "configurePresets": [
         {
+            "name": "d3d11_mock_debug",
+            "generator": "Ninja",
+            "binaryDir": "build/d3d11_mock_debug",
+            "cacheVariables": {
+                "SOKOL_BACKEND": "SOKOL_D3D11",
+                "BACKEND_MOCK_ONLY": "ON",
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "metal_mock_debug",
+            "generator": "Ninja",
+            "binaryDir": "build/metal_mock_debug",
+            "cacheVariables": {
+                "SOKOL_BACKEND": "SOKOL_METAL",
+                "BACKEND_MOCK_ONLY": "ON",
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "metal_mock_arc_debug",
+            "generator": "Ninja",
+            "binaryDir": "build/metal_mock_arc_debug",
+            "cacheVariables": {
+                "SOKOL_BACKEND": "SOKOL_METAL",
+                "BACKEND_MOCK_ONLY": "ON",
+                "USE_ARC": { "type": "BOOL", "value": "ON" },
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "glcore_mock_debug",
+            "generator": "Ninja",
+            "binaryDir": "build/glcore_mock_debug",
+            "cacheVariables": {
+                "SOKOL_BACKEND": "SOKOL_GLCORE",
+                "BACKEND_MOCK_ONLY": "ON",
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
+            "name": "gles3_mock_debug",
+            "generator": "Ninja",
+            "binaryDir": "build/gles3_mock_debug",
+            "cacheVariables": {
+                "SOKOL_BACKEND": "SOKOL_GLES3",
+                "BACKEND_MOCK_ONLY": "ON",
+                "CMAKE_BUILD_TYPE": "Debug"
+            }
+        },
+        {
             "name": "macos_gl_debug",
             "generator": "Ninja",
             "binaryDir": "build/macos_gl_debug",
@@ -168,7 +219,10 @@
             "binaryDir": "build/ios_gl",
             "cacheVariables": {
                 "SOKOL_BACKEND": "SOKOL_GLES3",
-                "CMAKE_SYSTEM_NAME": "iOS"
+                "CMAKE_SYSTEM_NAME": "iOS",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY": "",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED": "NO",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED": "NO"
             }
         },
         {
@@ -184,7 +238,10 @@
                     "value": "ON"
                 },
                 "CMAKE_C_COMPILER": "clang",
-                "CMAKE_CXX_COMPILER": "clang++"
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY": "",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED": "NO",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED": "NO"
             }
         },
         {
@@ -193,7 +250,10 @@
             "binaryDir": "build/ios_metal",
             "cacheVariables": {
                 "SOKOL_BACKEND": "SOKOL_METAL",
-                "CMAKE_SYSTEM_NAME": "iOS"
+                "CMAKE_SYSTEM_NAME": "iOS",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY": "",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED": "NO",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED": "NO"
             }
         },
         {
@@ -209,7 +269,10 @@
                     "value": "ON"
                 },
                 "CMAKE_C_COMPILER": "clang",
-                "CMAKE_CXX_COMPILER": "clang++"
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY": "",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED": "NO",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED": "NO"
             }
         },
         {
@@ -222,7 +285,10 @@
                     "type": "BOOL",
                     "value": "ON"
                 },
-                "CMAKE_SYSTEM_NAME": "iOS"
+                "CMAKE_SYSTEM_NAME": "iOS",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY": "",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED": "NO",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED": "NO"
             }
         },
         {
@@ -242,7 +308,10 @@
                     "value": "ON"
                 },
                 "CMAKE_C_COMPILER": "clang",
-                "CMAKE_CXX_COMPILER": "clang++"
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY": "",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED": "NO",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED": "NO"
             }
         },
         {
@@ -255,7 +324,10 @@
                     "type": "BOOL",
                     "value": "ON"
                 },
-                "CMAKE_SYSTEM_NAME": "iOS"
+                "CMAKE_SYSTEM_NAME": "iOS",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY": "",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED": "NO",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED": "NO"
             }
         },
         {
@@ -275,7 +347,10 @@
                     "value": "ON"
                 },
                 "CMAKE_C_COMPILER": "clang",
-                "CMAKE_CXX_COMPILER": "clang++"
+                "CMAKE_CXX_COMPILER": "clang++",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGN_IDENTITY": "",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_REQUIRED": "NO",
+                "CMAKE_XCODE_ATTRIBUTE_CODE_SIGNING_ALLOWED": "NO"
             }
         },
         {
@@ -532,9 +607,53 @@
                 "CMAKE_C_COMPILER": "clang",
                 "CMAKE_CXX_COMPILER": "clang++"
             }
+        },
+        {
+            "name": "win_d3d11_mock",
+            "binaryDir": "build/win_d3d11_mock",
+            "cacheVariables": {
+                "SOKOL_BACKEND": "SOKOL_D3D11",
+                "BACKEND_MOCK_ONLY": "ON"
+            }
+        },
+        {
+            "name": "win_glcore_mock",
+            "binaryDir": "build/win_glcore_mock",
+            "cacheVariables": {
+                "SOKOL_BACKEND": "SOKOL_GLCORE",
+                "BACKEND_MOCK_ONLY": "ON"
+            }
+        },
+        {
+            "name": "win_gles3_mock",
+            "binaryDir": "build/win_gles3_mock",
+            "cacheVariables": {
+                "SOKOL_BACKEND": "SOKOL_GLES3",
+                "BACKEND_MOCK_ONLY": "ON"
+            }
         }
     ],
     "buildPresets": [
+        {
+            "name": "d3d11_mock_debug",
+            "configurePreset": "d3d11_mock_debug"
+        },
+        {
+            "name": "metal_mock_debug",
+            "configurePreset": "metal_mock_debug"
+        },
+        {
+            "name": "metal_mock_arc_debug",
+            "configurePreset": "metal_mock_arc_debug"
+        },
+        {
+            "name": "glcore_mock_debug",
+            "configurePreset": "glcore_mock_debug"
+        },
+        {
+            "name": "gles3_mock_debug",
+            "configurePreset": "gles3_mock_debug"
+        },
         {
             "name": "macos_gl_debug",
             "configurePreset": "macos_gl_debug"
@@ -587,13 +706,13 @@
             "name": "ios_gl_debug",
             "configurePreset": "ios_gl",
             "configuration": "Debug",
-            "nativeToolOptions": [ "CODE_SIGN_IDENTITY=\"\"", "CODE_SIGNING_REQUIRED=NO", "CODE_SIGNING_ALLOWED=NO" ]
+            "nativeToolOptions": [ "-quiet" ]
         },
         {
             "name": "ios_gl_release",
             "configurePreset": "ios_gl",
             "configuration": "Release",
-            "nativeToolOptions": [ "CODE_SIGN_IDENTITY=\"\"", "CODE_SIGNING_REQUIRED=NO", "CODE_SIGNING_ALLOWED=NO" ]
+            "nativeToolOptions": [ "-quiet" ]
         },
         {
             "name": "ios_gl_analyze",
@@ -603,13 +722,13 @@
             "name": "ios_metal_debug",
             "configurePreset": "ios_metal",
             "configuration": "Debug",
-            "nativeToolOptions": [ "CODE_SIGN_IDENTITY=\"\"", "CODE_SIGNING_REQUIRED=NO", "CODE_SIGNING_ALLOWED=NO" ]
+            "nativeToolOptions": [ "-quiet" ]
         },
         {
             "name": "ios_metal_release",
             "configurePreset": "ios_metal",
             "configuration": "Release",
-            "nativeToolOptions": [ "CODE_SIGN_IDENTITY=\"\"", "CODE_SIGNING_REQUIRED=NO", "CODE_SIGNING_ALLOWED=NO" ]
+            "nativeToolOptions": [ "-quiet" ]
         },
         {
             "name": "ios_metal_analyze",
@@ -619,13 +738,13 @@
             "name": "ios_arc_gl_debug",
             "configurePreset": "ios_arc_gl",
             "configuration": "Debug",
-            "nativeToolOptions": [ "CODE_SIGN_IDENTITY=\"\"", "CODE_SIGNING_REQUIRED=NO", "CODE_SIGNING_ALLOWED=NO" ]
+            "nativeToolOptions": [ "-quiet" ]
         },
         {
             "name": "ios_arc_gl_release",
             "configurePreset": "ios_arc_gl",
             "configuration": "Release",
-            "nativeToolOptions": [ "CODE_SIGN_IDENTITY=\"\"", "CODE_SIGNING_REQUIRED=NO", "CODE_SIGNING_ALLOWED=NO" ]
+            "nativeToolOptions": [ "-quiet" ]
         },
         {
             "name": "ios_arc_gl_analyze",
@@ -635,13 +754,13 @@
             "name": "ios_arc_metal_debug",
             "configurePreset": "ios_arc_metal",
             "configuration": "Debug",
-            "nativeToolOptions": [ "CODE_SIGN_IDENTITY=\"\"", "CODE_SIGNING_REQUIRED=NO", "CODE_SIGNING_ALLOWED=NO" ]
+            "nativeToolOptions": [ "-quiet" ]
         },
         {
             "name": "ios_arc_metal_release",
             "configurePreset": "ios_arc_metal",
             "configuration": "Release",
-            "nativeToolOptions": [ "CODE_SIGN_IDENTITY=\"\"", "CODE_SIGNING_REQUIRED=NO", "CODE_SIGNING_ALLOWED=NO" ]
+            "nativeToolOptions": [ "-quiet" ]
         },
         {
             "name": "ios_arc_metal_analyze",
@@ -752,6 +871,21 @@
         {
             "name": "win_d3d11_analyze",
             "configurePreset": "win_d3d11_analyze"
+        },
+        {
+            "name": "win_d3d11_mock_debug",
+            "configurePreset": "win_d3d11_mock",
+            "configuration": "Debug"
+        },
+        {
+            "name": "win_glcore_mock_debug",
+            "configurePreset": "win_glcore_mock",
+            "configuration": "Debug"
+        },
+        {
+            "name": "win_gles3_mock_debug",
+            "configurePreset": "win_gles3_mock",
+            "configuration": "Debug"
         }
     ]
 }

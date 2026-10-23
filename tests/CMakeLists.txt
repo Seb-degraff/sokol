@@ -1,3 +1,4 @@
+# LLM maintained.
 cmake_minimum_required(VERSION 3.20)
 project(sokol-test)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
@@ -10,6 +11,13 @@ set_property(CACHE SOKOL_BACKEND PROPERTY STRINGS SOKOL_GLCORE SOKOL_METAL SOKOL
 option(SOKOL_FORCE_EGL "Force EGL with GLCORE backend" OFF)
 option(USE_ARC "Enable/disable ARC" OFF)
 option(USE_ANALYZER "Enable/disable clang analyzer" OFF)
+# Clang source-based code coverage for the test targets (see coverage.sh)
+option(SOKOL_COVERAGE "Instrument test targets for clang source-based coverage" OFF)
+# Enabled by the *_mock_* presets to route sokol backend headers through the
+# stub libraries in tests/mocks/. Only the matching sokol-<backend>-test
+# executable is built in that mode -- compile tests and sokol-test both pull
+# sokol_app.h whose backend paths are not (yet) mocked.
+option(BACKEND_MOCK_ONLY "Build only the sokol backend mock test targets" OFF)
 
 if (CMAKE_SYSTEM_NAME STREQUAL Emscripten)
     set(EMSCRIPTEN 1)
@@ -63,8 +71,9 @@ else()
         # FIXME: consider using clang-tidy via CMAKE_CXX_CLANG_TIDY: https://ortogonal.github.io/cmake-clang-tidy/
         # with the default settings this spams the output with irrelevant C++ coding style warnings in 3rd party libs though
         message(">> Configuring for static code analysis")
-        set(c_flags ${c_flags} --analyze -Xanalyzer -analyzer-opt-analyze-headers)
-        set(cxx_flags ${cxx_flags} --analyze -Xanalyzer -analyzer-opt-analyze-headers)
+        # newer clang versions warn that '-c' is unused with '--analyze'
+        set(c_flags ${c_flags} --analyze -Xanalyzer -analyzer-opt-analyze-headers -Wno-unused-command-line-argument)
+        set(cxx_flags ${cxx_flags} --analyze -Xanalyzer -analyzer-opt-analyze-headers -Wno-unused-command-line-argument)
         set(link_flags ${link_flags} --analyze -Wno-unused-command-line-argument)
     endif()
 endif()
@@ -75,7 +84,7 @@ if (EMSCRIPTEN)
     if (SOKOL_BACKEND STREQUAL SOKOL_WGPU)
         set(c_flags ${c_flags} --use-port=emdawnwebgpu)
         set(cxx_flags ${cxx_flags} --use-port=emdawnwebgpu)
-        set(link_flags ${link_flags} --use-port=emdawnwebgpu)
+        set(link_flags ${link_flags} --use-port=emdawnwebgpu -sDEFAULT_TO_CXX)
     else()
         set(link_flags ${link_flags} -sMIN_WEBGL_VERSION=2 -sMAX_WEBGL_VERSION=2)
     endif()
@@ -87,7 +96,7 @@ elseif (OSX_IOS)
     endif()
     set(system_libs ${system_libs} "-framework Foundation" "-framework QuartzCore" "-framework UIKit" "-framework AudioToolbox" "-framework AVFoundation")
     if (SOKOL_BACKEND STREQUAL SOKOL_METAL)
-        set(system_libs ${system_libs} "-framework Metal")
+        set(system_libs ${system_libs} "-framework Metal" "-framework CoreGraphics")
     else()
         set(system_libs ${system_libs} "-framework OpenGLES" "-framework GLKit")
     endif()
@@ -122,6 +131,17 @@ elseif (WINDOWS)
     endif()
 endif()
 
+# Mock mode builds sokol_gfx.h only, against the stub backend libraries. No
+# window-system or GPU libs are needed, and linking the real GL would clash
+# with the GL mock's own function symbols.
+if (BACKEND_MOCK_ONLY)
+    if (LINUX)
+        set(system_libs m dl Threads::Threads)
+    else()
+        set(system_libs)
+    endif()
+endif()
+
 macro(configure_common target)
     if (SOKOL_FORCE_EGL)
         target_compile_definitions(${target} PRIVATE SOKOL_FORCE_EGL)
@@ -129,11 +149,26 @@ macro(configure_common target)
     target_compile_definitions(${target} PRIVATE ${SOKOL_BACKEND})
     target_link_options(${target} PRIVATE ${link_flags})
     target_link_libraries(${target} PRIVATE ${system_libs})
+    if (SOKOL_COVERAGE)
+        target_compile_options(${target} PRIVATE -fprofile-instr-generate -fcoverage-mapping)
+        target_link_options(${target} PRIVATE -fprofile-instr-generate)
+    endif()
     target_include_directories(${target} PRIVATE ../.. ../../util)
     target_include_directories(${target} PRIVATE ../ext)
     if (WINDOWS AND SOKOL_BACKEND STREQUAL SOKOL_VULKAN)
         target_include_directories(${target} PUBLIC $ENV{VULKAN_SDK}/Include)
         target_link_directories(${target} PUBLIC $ENV{VULKAN_SDK}/Lib)
+    endif()
+    # In mock mode route the backend's SDK headers/functions through the
+    # matching mock library in tests/mocks/.
+    if (BACKEND_MOCK_ONLY AND SOKOL_BACKEND STREQUAL SOKOL_D3D11)
+        target_link_libraries(${target} PRIVATE sokol_d3d11_mock)
+    endif()
+    if (BACKEND_MOCK_ONLY AND (SOKOL_BACKEND STREQUAL SOKOL_GLCORE OR SOKOL_BACKEND STREQUAL SOKOL_GLES3))
+        target_link_libraries(${target} PRIVATE sokol_gl_mock)
+    endif()
+    if (BACKEND_MOCK_ONLY AND SOKOL_BACKEND STREQUAL SOKOL_METAL)
+        target_link_libraries(${target} PRIVATE sokol_metal_mock)
     endif()
 endmacro()
 
@@ -166,5 +201,13 @@ macro(configure_cxx target)
 endmacro()
 
 add_subdirectory(ext)
-add_subdirectory(compile)
+# Mock libraries for backend SDK headers. Only needed in mock mode.
+if (BACKEND_MOCK_ONLY)
+    add_subdirectory(mocks)
+endif()
+# Compile tests link sokol_app.h whose backend-specific paths are not covered
+# by the mock libraries.
+if (NOT BACKEND_MOCK_ONLY)
+    add_subdirectory(compile)
+endif()
 add_subdirectory(functional)

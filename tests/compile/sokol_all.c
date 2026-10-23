@@ -14,6 +14,8 @@
 #include "sokol_letterbox.h"
 #include "sokol_memtrack.h"
 #include "sokol_shape.h"
+#include "sokol_framebuffer.h"
+#include "sokol_cmdbuf.h"
 
 #if defined(_MSC_VER )
 #pragma warning(disable:4201) // nonstandard extension used: nameless struct/union
@@ -73,11 +75,12 @@ void use_all(void) {
     sgl_setup(&(sgl_desc_t){0});
     const slbx_viewport vp = slbx_letterbox(256, 256, &(slbx_letterbox_desc){0}); (void)vp;
     void* p = smemtrack_alloc(8, 0); (void)p;
-    sshape_plane_sizes(10);
+    sshape_plane_sizes(10, SSHAPE_MAX_VERTEX_SIZE);
     simgui_setup(&(simgui_desc_t){0});
     sgimgui_setup(&(sgimgui_desc_t){0});
     sappimgui_setup();
     FONScontext* ctx = sfons_create(&(sfons_desc_t){ 0 }); (void)ctx;
     sspine_setup(&(sspine_desc){0});
     snk_setup(&(snk_desc_t){0});
+    sfb_setup(&(sfb_desc){0});
 }

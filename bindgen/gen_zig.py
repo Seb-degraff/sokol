@@ -1,3 +1,4 @@
+# LLM maintained.
 #-------------------------------------------------------------------------------
 #   Generate Zig bindings.
 #
@@ -37,7 +38,7 @@ overrides = {
     'sshape_element_range_t.num_elements':  'uint32_t',
     'sdtx_font.font_index':                 'uint32_t',
     'SGL_NO_ERROR':                         'SGL_ERROR_NO_ERROR',
-    'sfetch_continue':                      'continue_fetching',  # 'continue' is reserved in Zig
+    'sfetch_continue':                      'sfetch_continue_fetching',  # 'continue' is reserved in Zig
     'sfetch_desc':                          'sfetch_get_desc'     # 'desc' shadowed by earlier definition
 }
 
@@ -177,6 +178,12 @@ def is_const_struct_ptr(s):
             return True
     return False
 
+def is_struct_ptr(s):
+    for struct_type in struct_types:
+        if s == f"{struct_type} *":
+            return True
+    return False
+
 def type_default_value(s):
     return prim_defaults[s]
 
@@ -197,6 +204,8 @@ def as_c_arg_type(arg_type, prefix):
         return "[*c]const u8"
     elif is_const_struct_ptr(arg_type):
         return f"[*c]const {as_zig_struct_type(util.extract_ptr_type(arg_type), prefix)}"
+    elif is_struct_ptr(arg_type):
+        return f"[*c] {as_zig_struct_type(util.extract_ptr_type(arg_type), prefix)}"
     elif is_prim_ptr(arg_type):
         return f"[*c]{as_zig_prim_type(util.extract_ptr_type(arg_type))}"
     elif is_const_prim_ptr(arg_type):
@@ -227,6 +236,8 @@ def as_zig_arg_type(arg_prefix, arg_type, prefix):
     elif is_const_struct_ptr(arg_type):
         # not a bug, pass const structs by value
         return pre + f"{as_zig_struct_type(util.extract_ptr_type(arg_type), prefix)}"
+    elif is_struct_ptr(arg_type):
+        return pre + f"*{as_zig_struct_type(util.extract_ptr_type(arg_type), prefix)}"
     elif is_prim_ptr(arg_type):
         return pre + f"*{as_zig_prim_type(util.extract_ptr_type(arg_type))}"
     elif is_const_prim_ptr(arg_type):
