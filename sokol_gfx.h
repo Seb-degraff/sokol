@@ -12057,7 +12057,7 @@ _SOKOL_PRIVATE bool _sg_gl_apply_bindings(_sg_bindings_ptrs_t* bnd) {
         if (tex_smp->stage == SG_SHADERSTAGE_NONE) {
             continue;
         }
-        const int8_t gl_tex_slot = (GLint)shd->gl.tex_slot[tex_smp_index];
+        const int8_t gl_tex_slot = shd->gl.tex_slot[tex_smp_index]; // @SEB: removed cast to GLint which was triggering -Wimplicit-int-conversion when compiling to wasm32
         if (gl_tex_slot != -1) {
             SOKOL_ASSERT(tex_smp->view_slot < SG_MAX_VIEW_BINDSLOTS);
             SOKOL_ASSERT(tex_smp->sampler_slot < SG_MAX_SAMPLER_BINDSLOTS);
