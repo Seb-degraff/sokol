@@ -4111,7 +4111,7 @@ typedef struct sg_trace_hooks {
 */
 typedef struct sg_slot_info {
     sg_resource_state state;    // the current state of this resource slot
-    uint32_t res_id;            // type-neutral resource if (e.g. sg_buffer.id)
+    uint32_t res_id;            // type-neutral resource id (e.g. sg_buffer.id)
     uint32_t uninit_count;
 } sg_slot_info;
 
